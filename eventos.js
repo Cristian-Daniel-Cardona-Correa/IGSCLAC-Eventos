@@ -12,7 +12,7 @@ if (typeof wpApiSettings === 'undefined') {
   var wpApiSettings = { root: '/wp-json/', nonce: '' };
 }
 
-const PER_PAGE = 1;
+const PER_PAGE = 6;
 
 let state = {
   role: localStorage.getItem('igsclac_role') || 'user',
