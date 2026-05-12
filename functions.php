@@ -130,6 +130,25 @@ function igsclac_deshabilitar_eventos_antiguos() {
 add_action('wp_loaded', 'igsclac_deshabilitar_eventos_antiguos');
 
 /* ============================================================
+   2.7 MIGRACIÓN: Agregar columna asistentes_manuales
+============================================================ */
+function igsclac_migrar_asistentes_manuales() {
+    global $wpdb;
+    $tabla = $wpdb->prefix . 'igsclac_eventos';
+    
+    // Verificar si la columna ya existe
+    $result = $wpdb->get_results("DESCRIBE $tabla WHERE Field = 'asistentes_manuales'");
+    
+    if (empty($result)) {
+        // La columna no existe, crearla
+        $wpdb->query("ALTER TABLE $tabla ADD COLUMN `asistentes_manuales` INT DEFAULT 0 NOT NULL");
+        error_log('Columna asistentes_manuales creada en ' . $tabla);
+    }
+}
+add_action('wp_loaded', 'igsclac_migrar_asistentes_manuales');
+add_action('rest_api_init', 'igsclac_migrar_asistentes_manuales');
+
+/* ============================================================
    3. ENDPOINTS REST PARA EVENTOS Y REGISTROS
 ============================================================ */
 add_action('rest_api_init', function () {
@@ -185,6 +204,12 @@ add_action('rest_api_init', function () {
         'callback'            => 'igsclac_crear_registro',
         'permission_callback' => '__return_true'
     ));
+    // Actualizar asistentes manuales
+    register_rest_route('igsclac/v1', '/eventos/(?P<id>[a-z0-9_]+)/asistentes-manuales', array(
+        'methods'             => 'POST',
+        'callback'            => 'igsclac_actualizar_asistentes_manuales',
+        'permission_callback' => '__return_true'
+    ));
 });
 
 function igsclac_obtener_eventos( $request ) {
@@ -238,6 +263,7 @@ function igsclac_obtener_eventos( $request ) {
             'registroHabilitado' => (bool) $e['registro_habilitado'],
             'habilitado'         => isset($e['habilitado']) ? (bool) $e['habilitado'] : true,
             'ejeTematico'        => $e['eje_tematico'],
+            'asistentes_manuales' => isset($e['asistentes_manuales']) ? (int) $e['asistentes_manuales'] : 0,
         );
     }, $results );
 
@@ -396,6 +422,50 @@ function igsclac_crear_registro($request) {
     );
     $wpdb->insert($tabla_registros, $registro);
     return rest_ensure_response(['success' => true, 'id' => $wpdb->insert_id]);
+}
+
+function igsclac_actualizar_asistentes_manuales($request) {
+    global $wpdb;
+    $id = $request->get_param('id');
+    $data = $request->get_json_params();
+    $tabla = $wpdb->prefix . 'igsclac_eventos';
+
+    // Validar que el evento existe y obtener su capacidad
+    $evento = $wpdb->get_row($wpdb->prepare("SELECT id, capacidad FROM $tabla WHERE id = %s", $id));
+    if (!$evento) {
+        return new WP_Error('not_found', 'Evento no encontrado', array('status' => 404));
+    }
+
+    // Validar que sea un número válido
+    $cantidad = isset($data['cantidad']) ? intval($data['cantidad']) : 0;
+    if ($cantidad < 0) {
+        return new WP_Error('invalid_quantity', 'La cantidad no puede ser negativa', array('status' => 400));
+    }
+    
+    // Validar que no exceda la capacidad del evento
+    if ($cantidad > $evento->capacidad) {
+        return new WP_Error('exceeds_capacity', 'La cantidad no puede ser mayor a la capacidad del evento (' . $evento->capacidad . ')', array('status' => 400));
+    }
+
+    // Actualizar en la BD
+    $wpdb->query($wpdb->prepare(
+        "UPDATE $tabla SET asistentes_manuales = %d WHERE id = %s",
+        $cantidad,
+        $id
+    ));
+
+    // Verificar que se actualizó
+    $verificar = $wpdb->get_var($wpdb->prepare(
+        "SELECT asistentes_manuales FROM $tabla WHERE id = %s",
+        $id
+    ));
+
+    return rest_ensure_response(array(
+        'success' => true,
+        'asistentes_manuales' => (int) $verificar,
+        'evento_id' => $id,
+        'capacidad' => (int) $evento->capacidad
+    ));
 }
 
 /* ============================================================

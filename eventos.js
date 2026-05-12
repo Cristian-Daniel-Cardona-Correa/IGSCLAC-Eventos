@@ -1189,6 +1189,12 @@ async function renderAdmin(c) {
 
   cachedAcademicEvents = acad;
   cachedResearchEvents = inv;
+  
+  // Debug: verificar que asistentes_manuales está en los datos
+  if (acad.length > 0) {
+    console.log('Primer evento académico:', acad[0]);
+    console.log('¿Tiene asistentes_manuales?', 'asistentes_manuales' in acad[0]);
+  }
 
   // Procesar eventos académicos con paginación
   let sortedAcad = sortEvents(acad, currentAcademicSort);
@@ -1374,6 +1380,15 @@ async function adminTable(list, tipoKey) {
   for (const e of list) {
     const regs = await cargarRegistros(e.id);
     const rCount = regs.length;
+    const isPast = isEventPast(e.fechaFin || e.fechaInicio);
+    const isRegDisabled = !e.registroHabilitado;
+    const totalAsistentes = rCount + (e.asistentes_manuales || 0);
+    const canEditManual = isPast && isRegDisabled;
+    
+    const registroCell = canEditManual 
+      ? `<strong>${totalAsistentes}</strong> <button class="btn btn-sm btn-secondary" style="padding:2px 6px;margin-left:6px;" onclick="openEditAsistentes('${e.id}','${tipoKey}',${e.asistentes_manuales || 0})"><i class="fa-solid fa-pen"></i></button>`
+      : `<strong>${totalAsistentes}</strong>`;
+    
     rows += `
       <tr>
         <td style="text-align:center">
@@ -1386,7 +1401,7 @@ async function adminTable(list, tipoKey) {
         <td>${fmtDate(e.fechaInicio)}</td>
         <td style="text-align:center">${esc(e.tipoEvento)}</td>
         <td style="text-align:center">${e.capacidad}</td>
-        <td style="text-align:center"><strong>${rCount}</strong></td>
+        <td style="text-align:center">${registroCell}</td>
         <td style="text-align:center">${e.registroHabilitado ? '<span style="color:var(--secondary);font-weight:700">Sí</span>' : 'No'}</td>
         <td style="text-align:center">
           <div class="action-buttons">
@@ -1403,6 +1418,127 @@ async function adminTable(list, tipoKey) {
     <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th>Título</th><th>Fecha</th><th style="text-align:center">Tipo</th><th style="text-align:center">Capacidad</th><th style="text-align:center">Registros</th><th style="text-align:center">Reg. habilitado</th><th style="text-align:center">Acciones</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+async function openEditAsistentes(id, tipoKey, currentManual) {
+  const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
+  const e = eventos.find(x => x.id === id);
+  if (!e) { toast('Evento no encontrado', 'error'); return; }
+  
+  $('#modal-title').textContent = 'Registrar asistentes manuales · ' + e.titulo;
+  $('#modal-body').innerHTML = `
+    <p style="margin-bottom:14px;color:var(--text-soft)">Ingresa la cantidad de personas que asistieron al evento. El total será: registros automáticos + tu entrada.</p>
+    <div class="form-group">
+      <label>Cantidad de asistentes manuales</label>
+      <input type="number" id="edit-asistentes-input" min="0" value="${currentManual}" class="form-control" style="padding:10px;border:1px solid var(--border);border-radius:4px;">
+      <small style="color:var(--text-soft);margin-top:8px;display:block;">No puede exceder la capacidad del evento (${e.capacidad})</small>
+    </div>
+  `;
+  
+  $('#modal-footer').innerHTML = `
+    <button class="btn" onclick="saveAsistentes('${id}','${tipoKey}')"><i class="fa-solid fa-check"></i> Guardar</button>
+    <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+  `;
+  
+  showModal();
+}
+
+async function saveAsistentes(id, tipoKey) {
+  const input = document.getElementById('edit-asistentes-input');
+  const inputValue = input.value.trim();
+  
+  // Validación: campo vacío
+  if (!inputValue) {
+    toast('Por favor ingresa una cantidad', 'error');
+    input.focus();
+    return;
+  }
+  
+  const cantidad = parseInt(inputValue, 10);
+  
+  // Validación: NaN
+  if (isNaN(cantidad)) {
+    toast('La cantidad debe ser un número válido', 'error');
+    input.focus();
+    return;
+  }
+  
+  // Obtener evento para validar capacidad
+  const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
+  const evento = eventos.find(e => e.id === id);
+  
+  // Validación: negativo
+  if (cantidad < 0) {
+    toast('La cantidad no puede ser negativa', 'error');
+    input.focus();
+    return;
+  }
+  
+  // Validación: no excede capacidad
+  if (evento && cantidad > evento.capacidad) {
+    toast(`La cantidad no puede ser mayor a ${evento.capacidad} (capacidad del evento)`, 'error');
+    input.focus();
+    return;
+  }
+  
+  try {
+    const response = await fetchAPI(`/eventos/${id}/asistentes-manuales`, { 
+      method: 'POST', 
+      body: { cantidad } 
+    });
+    
+    if (!response.success) {
+      throw new Error('Error al guardar los datos');
+    }
+    
+    // Actualizar caché local
+    if (evento) {
+      evento.asistentes_manuales = cantidad;
+    }
+    
+    toast('✓ Asistentes guardados correctamente');
+    closeModal();
+    
+    // Refrescar solo la tabla correspondiente
+    await actualizarTablaAdmin(tipoKey);
+  } catch (err) {
+    console.error('Error:', err);
+    toast('Error al guardar: ' + (err.message || 'Error desconocido'), 'error');
+  }
+}
+
+async function actualizarTablaAdmin(tipoKey) {
+  try {
+    if (tipoKey === 'acad') {
+      const filtered = state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad);
+      const sorted = sortEvents(filtered, currentAcademicSort);
+      const totalPages = Math.ceil(sorted.length / PER_PAGE);
+      const currentPage = Math.min(state.pageAdminAcad, totalPages || 1);
+      const start = (currentPage - 1) * PER_PAGE;
+      const paginated = sorted.slice(start, start + PER_PAGE);
+      
+      const newHtml = await adminTable(paginated, 'acad');
+      const container = document.getElementById('academic-table-container');
+      if (container) {
+        container.innerHTML = newHtml;
+      }
+    } else {
+      const filtered = state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv);
+      const sorted = sortEvents(filtered, currentResearchSort);
+      const totalPages = Math.ceil(sorted.length / PER_PAGE);
+      const currentPage = Math.min(state.pageAdminInv, totalPages || 1);
+      const start = (currentPage - 1) * PER_PAGE;
+      const paginated = sorted.slice(start, start + PER_PAGE);
+      
+      const newHtml = await adminTable(paginated, 'inv');
+      const container = document.getElementById('research-table-container');
+      if (container) {
+        container.innerHTML = newHtml;
+      }
+    }
+  } catch (err) {
+    console.error('Error al actualizar tabla:', err);
+  }
 }
 
 async function toggleEventVisibility(event, id, tipoKey) {
