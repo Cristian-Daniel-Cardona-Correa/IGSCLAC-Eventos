@@ -313,31 +313,20 @@ async function goPage(context, page) {
     const newHtml = await adminTable(paginated, tipoKey);
     const paginationHtmlString = paginationHtml(page, totalPages, context);
     
-    if (context === 'admin-acad') {
-      const container = document.getElementById('academic-table-container');
-      const paginationEl = document.getElementById('pagination-admin-acad');
-      if (container) {
-        container.innerHTML = newHtml;
-        if (paginationEl) {
-          paginationEl.outerHTML = paginationHtmlString;
-        } else {
-          container.insertAdjacentHTML('afterend', paginationHtmlString);
-        }
+    const containerId = context === 'admin-acad' ? 'academic-table-container' : 'research-table-container';
+    const container = document.getElementById(containerId);
+    const paginationEl = document.getElementById('pagination-' + context);
+
+    if (container) {
+      container.innerHTML = newHtml;
+      if (paginationEl) {
+        paginationEl.outerHTML = paginationHtmlString;
+      } else {
+        container.insertAdjacentHTML('afterend', paginationHtmlString);
       }
-    } else {
-      const container = document.getElementById('research-table-container');
-      const paginationEl = document.getElementById('pagination-admin-inv');
-      if (container) {
-        container.innerHTML = newHtml;
-        if (paginationEl) {
-          paginationEl.outerHTML = paginationHtmlString;
-        } else {
-          container.insertAdjacentHTML('afterend', paginationHtmlString);
-        }
-      }
+      // Desplazar al centro de la tabla
+      container.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    
-    document.getElementById('content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     await render();
     document.getElementById('content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
