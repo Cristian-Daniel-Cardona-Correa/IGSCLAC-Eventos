@@ -330,6 +330,14 @@ function igsclac_toggle_evento($request) {
         $new = $current ? 0 : 1;
     }
 
+    // Validar: no se puede habilitar un evento antiguo
+    if ($new === 1) {
+        $evento = $wpdb->get_row($wpdb->prepare("SELECT fecha_fin FROM $tabla WHERE id = %s", $id));
+        if ($evento && $evento->fecha_fin < date('Y-m-d')) {
+            return new WP_Error('evento_antiguo', 'No se puede habilitar un evento pasado', array('status' => 400));
+        }
+    }
+
     $wpdb->update($tabla, array('habilitado' => $new), array('id' => $id));
     return rest_ensure_response(array('success' => true, 'habilitado' => (bool) $new));
 }

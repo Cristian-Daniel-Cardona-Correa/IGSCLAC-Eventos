@@ -190,8 +190,19 @@ async function fetchAPI(endpoint, options = {}) {
   const res = await fetch(API_BASE + endpoint, defaultOptions);
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(errorText || `Error ${res.status}`);
+    let errorMessage = `Error ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.data?.message) {
+        errorMessage = errorData.data.message;
+      }
+    } catch (e) {
+      const errorText = await res.text();
+      if (errorText) errorMessage = errorText;
+    }
+    throw new Error(errorMessage);
   }
 
   return res.json();
@@ -1257,7 +1268,7 @@ async function adminTable(list, tipoKey) {
       <tr>
         <td style="text-align:center">
           <label class="toggle-switch">
-            <input type="checkbox" ${e.habilitado ? 'checked' : ''} onclick="toggleEventVisibility('${e.id}','${tipoKey}', ${!e.habilitado})">
+            <input type="checkbox" ${e.habilitado ? 'checked' : ''} onchange="toggleEventVisibility(event, '${e.id}','${tipoKey}')">
             <span class="toggle-slider"></span>
           </label>
         </td>
@@ -1284,8 +1295,24 @@ async function adminTable(list, tipoKey) {
   </table></div>`;
 }
 
-async function toggleEventVisibility(id, tipoKey, newState) {
+async function toggleEventVisibility(event, id, tipoKey) {
   if (state.role !== 'admin') { toast('Solo el administrador puede cambiar la visibilidad', 'error'); return; }
+  
+  const newState = event.target.checked;
+  
+  // Obtener el evento actual
+  const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
+  const evento = eventos.find(e => e.id === id);
+  
+  if (!evento) { toast('Evento no encontrado', 'error'); event.target.checked = !newState; return; }
+  
+  // Validar: no se puede habilitar un evento antiguo
+  if (newState && isEventPast(evento.fechaFin || evento.fechaInicio)) {
+    toast('No se puede habilitar un evento pasado. Cambia la fecha a una mayor que hoy.', 'error');
+    event.target.checked = !newState; // Revertir el estado del checkbox
+    return;
+  }
+  
   try {
     await fetchAPI(`/eventos/${id}/toggle`, { method: 'POST', body: { habilitado: newState } });
     toast(newState ? 'Evento habilitado' : 'Evento deshabilitado');
@@ -1311,6 +1338,7 @@ async function toggleEventVisibility(id, tipoKey, newState) {
     }
   } catch (err) {
     toast('Error al cambiar visibilidad: ' + err.message, 'error');
+    event.target.checked = !newState; // Revertir el estado del checkbox si hay error
   }
 }
 
