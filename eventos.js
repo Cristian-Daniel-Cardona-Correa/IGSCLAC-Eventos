@@ -173,7 +173,7 @@ async function fetchAPI(endpoint, options = {}) {
 async function cargarEventos(tipo, includeDisabled = false) {
   const endpoint = tipo === 'académico' ? '/eventos/academicos' : '/eventos/investigacion';
   const items = await fetchAPI(endpoint);
-  if (includeDisabled || state.role === 'admin') return items;
+  if (includeDisabled) return items;
   return (items || []).filter(e => e.habilitado !== false);
 }
 
@@ -357,10 +357,7 @@ async function renderHome(c) {
   const inv = await cargarEventos('investigación', true);
   let all = [...acad, ...inv].sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
 
-  // Filtrar eventos deshabilitados para usuarios no admin
-  if (state.role !== 'admin') {
-    all = all.filter(e => e.habilitado !== false);
-  }
+  all = all.filter(e => e.habilitado !== false);
 
   // Aplicar búsqueda si existe
   if (state.search) {
@@ -1183,14 +1180,14 @@ async function toggleEventVisibility(id, tipoKey, newState) {
   try {
     await fetchAPI(`/eventos/${id}/toggle`, { method: 'POST', body: { habilitado: newState } });
     toast(newState ? 'Evento habilitado' : 'Evento deshabilitado');
-    
+
     // Refrescar solo los eventos cacheados y regenerar tabla sin render() completo
     const acad = await cargarEventos('académico', true);
     const inv = await cargarEventos('investigación', true);
-    
+
     cachedAcademicEvents = acad;
     cachedResearchEvents = inv;
-    
+
     // Regenerar solo la tabla que necesita actualizar
     if (tipoKey === 'acad') {
       const sorted = sortEvents(acad, currentAcademicSort);
