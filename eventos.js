@@ -1326,12 +1326,16 @@ async function toggleEventVisibility(event, id, tipoKey) {
 
     // Regenerar solo la tabla que necesita actualizar
     if (tipoKey === 'acad') {
-      const sorted = sortEvents(acad, currentAcademicSort);
+      let sorted = sortEvents(acad, currentAcademicSort);
+      // Aplicar filtro de estado actual
+      sorted = state.filterAdminAcad === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminAcad);
       const newHtml = await adminTable(sorted, 'acad');
       const container = document.getElementById('academic-table-container');
       if (container) container.innerHTML = newHtml;
     } else {
-      const sorted = sortEvents(inv, currentResearchSort);
+      let sorted = sortEvents(inv, currentResearchSort);
+      // Aplicar filtro de estado actual
+      sorted = state.filterAdminInv === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminInv);
       const newHtml = await adminTable(sorted, 'inv');
       const container = document.getElementById('research-table-container');
       if (container) container.innerHTML = newHtml;
