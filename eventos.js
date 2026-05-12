@@ -21,6 +21,8 @@ let state = {
   pageHome: 1,
   pageAcad: 1,
   pageInv: 1,
+  pageAdminAcad: 1,
+  pageAdminInv: 1,
   filterHome: 'active',  // 'active' | 'past'
   filterAcad: 'active',  // 'active' | 'past' | 'drafts'
   filterInv: 'active',   // 'active' | 'past' | 'drafts'
@@ -533,7 +535,7 @@ async function cardHtml(e) {
         </div>
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="openEventDetail('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-eye"></i> Ver más</button>
-          ${e.registroHabilitado && state.role === 'user' ? `<button class="btn btn-sm" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Lleno' : 'Registrarse'}</button>` : ''}
+          ${e.registroHabilitado && state.role === 'user' && !isEventPast(e.fechaFin || e.fechaInicio) ? `<button class="btn btn-sm" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Lleno' : 'Registrarse'}</button>` : ''}
           ${state.role === 'admin' ? `
             <button class="btn btn-sm" onclick="openEventForm('${e.tipo}','${e.id}')"><i class="fa-solid fa-pen"></i></button>
             <button class="btn btn-sm" style="background:#6c757d; color:#fff;" onclick="duplicateEvent('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-regular fa-copy"></i></button>
@@ -547,7 +549,7 @@ async function cardHtml(e) {
 
 // ---------- DETALLE EVENTO ----------
 async function openEventDetail(id, tipoKey) {
-  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', state.role === 'admin') : await cargarEventos('investigación', state.role === 'admin');
+  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', true) : await cargarEventos('investigación', true);
   const e = eventos.find(x => x.id === id);
   if (!e) return;
   const originalRegistros = await cargarRegistros(id);
@@ -656,7 +658,7 @@ async function openEventDetail(id, tipoKey) {
   }
 
   $('#modal-footer').innerHTML = `
-        ${e.registroHabilitado && state.role === 'user' ? `<button class="btn" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${tipoKey}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Cupo lleno' : 'Registrarse'}</button>` : ''}
+        ${e.registroHabilitado && state.role === 'user' && !isEventPast(e.fechaFin || e.fechaInicio) ? `<button class="btn" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${tipoKey}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Cupo lleno' : 'Registrarse'}</button>` : ''}
         <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
     `;
   showModal();
@@ -1158,7 +1160,7 @@ async function renderAdmin(c) {
   // Aplicar filtros de estado
   sortedAcad = filterEventsByStatus(sortedAcad, state.filterAdminAcad === 'all' ? 'active' : state.filterAdminAcad);
   if (state.filterAdminAcad === 'all') sortedAcad = acad;
-  
+
   sortedInv = filterEventsByStatus(sortedInv, state.filterAdminInv === 'all' ? 'active' : state.filterAdminInv);
   if (state.filterAdminInv === 'all') sortedInv = inv;
 
@@ -1317,22 +1319,22 @@ async function adminTable(list, tipoKey) {
 
 async function toggleEventVisibility(event, id, tipoKey) {
   if (state.role !== 'admin') { toast('Solo el administrador puede cambiar la visibilidad', 'error'); return; }
-  
+
   const newState = event.target.checked;
-  
+
   // Obtener el evento actual
   const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
   const evento = eventos.find(e => e.id === id);
-  
+
   if (!evento) { toast('Evento no encontrado', 'error'); event.target.checked = !newState; return; }
-  
+
   // Validar: no se puede habilitar un evento antiguo
   if (newState && isEventPast(evento.fechaFin || evento.fechaInicio)) {
     toast('No se puede habilitar un evento pasado. Cambia la fecha a una mayor que hoy.', 'error');
     event.target.checked = !newState; // Revertir el estado del checkbox
     return;
   }
-  
+
   try {
     await fetchAPI(`/eventos/${id}/toggle`, { method: 'POST', body: { habilitado: newState } });
     toast(newState ? 'Evento habilitado' : 'Evento deshabilitado');
