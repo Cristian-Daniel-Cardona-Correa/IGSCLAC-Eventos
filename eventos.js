@@ -170,9 +170,11 @@ async function fetchAPI(endpoint, options = {}) {
 }
 
 // Llamadas API
-async function cargarEventos(tipo) {
+async function cargarEventos(tipo, includeDisabled = false) {
   const endpoint = tipo === 'académico' ? '/eventos/academicos' : '/eventos/investigacion';
-  return await fetchAPI(endpoint);
+  const items = await fetchAPI(endpoint);
+  if (includeDisabled || state.role === 'admin') return items;
+  return (items || []).filter(e => e.habilitado !== false);
 }
 
 async function cargarEventosPaginado(tipo, page, perPage) {
@@ -351,9 +353,14 @@ async function renderHome(c) {
   setBreadcrumbs([{ view: 'home', label: 'Inicio' }]);
 
   // Cargar todos los eventos (sin paginar)
-  const acad = await cargarEventos('académico');
-  const inv = await cargarEventos('investigación');
+  const acad = await cargarEventos('académico', true);
+  const inv = await cargarEventos('investigación', true);
   let all = [...acad, ...inv].sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+
+  // Filtrar eventos deshabilitados para usuarios no admin
+  if (state.role !== 'admin') {
+    all = all.filter(e => e.habilitado !== false);
+  }
 
   // Aplicar búsqueda si existe
   if (state.search) {
@@ -457,7 +464,7 @@ async function cardHtml(e) {
 
 // ---------- DETALLE EVENTO ----------
 async function openEventDetail(id, tipoKey) {
-  const eventos = tipoKey === 'acad' ? await cargarEventos('académico') : await cargarEventos('investigación');
+  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', state.role === 'admin') : await cargarEventos('investigación', state.role === 'admin');
   const e = eventos.find(x => x.id === id);
   if (!e) return;
   const originalRegistros = await cargarRegistros(id);
@@ -584,7 +591,7 @@ function openEventForm(tipo, id = null, preloadData = null) {
     if (preloadData) {
       e = preloadData;
     } else if (id) {
-      const eventos = await cargarEventos(tipo);
+      const eventos = await cargarEventos(tipo, true);
       e = eventos.find(x => x.id === id) || {};
     }
     const tiposAcad = ['Salida de campo', 'Muestra tecnológica', 'Feria estudiantil', 'Visitantes', 'Expo-poster', 'Otro'];
@@ -628,6 +635,7 @@ function openEventForm(tipo, id = null, preloadData = null) {
           </div>
           <div class="form-group full"><label>Enlace del evento ${isAcad ? '(transmisión / grabación)' : '(redes sociales)'}</label><input type="url" name="enlace" placeholder="https://..." value="${esc(e.enlace || '')}"></div>
           <div class="form-group full"><label class="checkbox-row"><input type="checkbox" name="registroHabilitado" ${e.registroHabilitado ? 'checked' : ''}> Habilitar registro de asistentes</label></div>
+          ${typeof e.habilitado !== 'undefined' ? `<input type="hidden" name="habilitado" value="${e.habilitado ? '1' : '0'}">` : ''}
         </div>
       </form>
     `;
@@ -673,7 +681,7 @@ async function deleteEvent(id, tipoKey) {
 
 async function duplicateEvent(id, tipoKey) {
   if (state.role !== 'admin') { toast('Solo el administrador puede duplicar eventos', 'error'); return; }
-  const eventos = tipoKey === 'acad' ? await cargarEventos('académico') : await cargarEventos('investigación');
+  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', true) : await cargarEventos('investigación', true);
   const original = eventos.find(x => x.id === id);
   if (!original) {
     toast('Evento no encontrado', 'error');
@@ -683,6 +691,7 @@ async function duplicateEvent(id, tipoKey) {
   delete clone.id;
   clone.fechaInicio = '';
   clone.fechaFin = '';
+  clone.habilitado = false;
   const tipoOriginal = original.tipo === 'académico' ? 'académico' : 'investigación';
   openEventForm(tipoOriginal, null, clone);
 }
@@ -691,7 +700,7 @@ async function duplicateEvent(id, tipoKey) {
 async function openRegister(id, tipoKey) {
   const prevForm = document.getElementById('reg-form');
   if (prevForm) clearFieldErrors(prevForm);
-  const eventos = tipoKey === 'acad' ? await cargarEventos('académico') : await cargarEventos('investigación');
+  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', state.role === 'admin') : await cargarEventos('investigación', state.role === 'admin');
   const e = eventos.find(x => x.id === id);
   if (!e) return;
   const regs = await cargarRegistros(id);
@@ -792,7 +801,7 @@ async function validateAndSubmitRegister(eventoId, tipoKey) {
 
   if (!isValid) return;
 
-  const eventos = tipoKey === 'acad' ? await cargarEventos('académico') : await cargarEventos('investigación');
+  const eventos = tipoKey === 'acad' ? await cargarEventos('académico', state.role === 'admin') : await cargarEventos('investigación', state.role === 'admin');
   const evento = eventos.find(x => x.id === eventoId);
   if (!evento) { toast('Evento no encontrado', 'error'); closeModal(); return; }
 
@@ -1054,8 +1063,8 @@ async function renderAdmin(c) {
   if (state.role !== 'admin') { navigate('home'); return; }
   setBreadcrumbs([{ view: 'home', label: 'Inicio' }, { view: 'admin', label: 'Panel de administración' }]);
 
-  const acad = await cargarEventos('académico');
-  const inv = await cargarEventos('investigación');
+  const acad = await cargarEventos('académico', true);
+  const inv = await cargarEventos('investigación', true);
 
   cachedAcademicEvents = acad;
   cachedResearchEvents = inv;
@@ -1140,6 +1149,12 @@ async function adminTable(list, tipoKey) {
     const rCount = regs.length;
     rows += `
       <tr>
+        <td style="text-align:center">
+          <label class="toggle-switch">
+            <input type="checkbox" ${e.habilitado ? 'checked' : ''} onclick="toggleEventVisibility('${e.id}','${tipoKey}', ${!e.habilitado})">
+            <span class="toggle-slider"></span>
+          </label>
+        </td>
         <td>${esc(e.titulo)}</td>
         <td>${fmtDate(e.fechaInicio)}</td>
         <td>${esc(e.tipoEvento)}</td>
@@ -1158,9 +1173,39 @@ async function adminTable(list, tipoKey) {
     `;
   }
   return `<div class="table-wrap"><table>
-    <thead><tr><th>Título</th><th>Fecha</th><th>Tipo</th><th>Capacidad</th><th>Registros</th><th>Reg. habilitado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th>Título</th><th>Fecha</th><th>Tipo</th><th>Capacidad</th><th>Registros</th><th>Reg. habilitado</th><th>Acciones</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+async function toggleEventVisibility(id, tipoKey, newState) {
+  if (state.role !== 'admin') { toast('Solo el administrador puede cambiar la visibilidad', 'error'); return; }
+  try {
+    await fetchAPI(`/eventos/${id}/toggle`, { method: 'POST', body: { habilitado: newState } });
+    toast(newState ? 'Evento habilitado' : 'Evento deshabilitado');
+    
+    // Refrescar solo los eventos cacheados y regenerar tabla sin render() completo
+    const acad = await cargarEventos('académico', true);
+    const inv = await cargarEventos('investigación', true);
+    
+    cachedAcademicEvents = acad;
+    cachedResearchEvents = inv;
+    
+    // Regenerar solo la tabla que necesita actualizar
+    if (tipoKey === 'acad') {
+      const sorted = sortEvents(acad, currentAcademicSort);
+      const newHtml = await adminTable(sorted, 'acad');
+      const container = document.getElementById('academic-table-container');
+      if (container) container.innerHTML = newHtml;
+    } else {
+      const sorted = sortEvents(inv, currentResearchSort);
+      const newHtml = await adminTable(sorted, 'inv');
+      const container = document.getElementById('research-table-container');
+      if (container) container.innerHTML = newHtml;
+    }
+  } catch (err) {
+    toast('Error al cambiar visibilidad: ' + err.message, 'error');
+  }
 }
 
 // ---------- CONTACTO  ----------

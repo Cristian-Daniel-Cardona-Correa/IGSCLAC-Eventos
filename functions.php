@@ -60,6 +60,7 @@ function igsclac_crear_tablas() {
         imagen VARCHAR(500),
         enlace VARCHAR(500),
         registro_habilitado TINYINT(1) DEFAULT 1,
+        habilitado TINYINT(1) DEFAULT 1,
         eje_tematico VARCHAR(255) NULL,
         PRIMARY KEY (id),
         KEY tipo (tipo),
@@ -91,6 +92,26 @@ function igsclac_crear_tablas() {
 add_action('after_switch_theme', 'igsclac_crear_tablas');
 
 /* ============================================================
+   2.5 MIGRACIÓN: Agregar columna habilitado si no existe
+============================================================ */
+function igsclac_migrar_habilitado() {
+    global $wpdb;
+    $tabla = $wpdb->prefix . 'igsclac_eventos';
+    
+    // Verificar si la columna ya existe
+    $column_exists = $wpdb->get_results(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_NAME = '$tabla' AND COLUMN_NAME = 'habilitado'"
+    );
+    
+    if (empty($column_exists)) {
+        // La columna no existe, crearla
+        $wpdb->query("ALTER TABLE $tabla ADD COLUMN habilitado TINYINT(1) DEFAULT 1");
+    }
+}
+add_action('wp_loaded', 'igsclac_migrar_habilitado');
+
+/* ============================================================
    3. ENDPOINTS REST PARA EVENTOS Y REGISTROS
 ============================================================ */
 add_action('rest_api_init', function () {
@@ -120,6 +141,12 @@ add_action('rest_api_init', function () {
     register_rest_route('igsclac/v1', '/eventos/(?P<tipo>academico|investigacion)', array(
         'methods'             => 'POST',
         'callback'            => 'igsclac_guardar_evento',
+        'permission_callback' => '__return_true'
+    ));
+    // Toggle habilitado de evento (solo admin)
+    register_rest_route('igsclac/v1', '/eventos/(?P<id>[a-z0-9_]+)/toggle', array(
+        'methods'             => 'POST',
+        'callback'            => 'igsclac_toggle_evento',
         'permission_callback' => '__return_true'
     ));
     // Eliminar evento (solo admin)
@@ -191,6 +218,7 @@ function igsclac_obtener_eventos( $request ) {
             'imagen'             => $e['imagen'],
             'enlace'             => $e['enlace'],
             'registroHabilitado' => (bool) $e['registro_habilitado'],
+            'habilitado'         => isset($e['habilitado']) ? (bool) $e['habilitado'] : true,
             'ejeTematico'        => $e['eje_tematico'],
         );
     }, $results );
@@ -233,10 +261,21 @@ function igsclac_guardar_evento($request) {
         'registro_habilitado' => !empty($data['registroHabilitado']) ? 1 : 0,
         'eje_tematico' => isset($data['ejeTematico']) ? sanitize_text_field($data['ejeTematico']) : null
     );
+    // manejar campo 'habilitado' solo si viene en el payload, para no sobrescribir en ediciones
+    if (isset($data['habilitado'])) {
+        // Convertir correctamente: si es string "1" o "0", o boolean true/false
+        $habilitado = $data['habilitado'];
+        if (is_string($habilitado)) {
+            $evento['habilitado'] = ($habilitado === '1' || strtolower($habilitado) === 'true') ? 1 : 0;
+        } else {
+            $evento['habilitado'] = !empty($habilitado) ? 1 : 0;
+        }
+    }
 
     if ($id) {
         $wpdb->update($tabla, $evento, array('id' => $id));
     } else {
+        if (!isset($evento['habilitado'])) $evento['habilitado'] = 1; // default al crear
         $wpdb->insert($tabla, $evento);
     }
     return rest_ensure_response(['success' => true, 'id' => $evento['id']]);
@@ -250,6 +289,31 @@ function igsclac_eliminar_evento($request) {
     $wpdb->delete($tabla_eventos, array('id' => $id));
     $wpdb->delete($tabla_registros, array('evento_id' => $id));
     return rest_ensure_response(['success' => true]);
+}
+
+function igsclac_toggle_evento($request) {
+    global $wpdb;
+    $id = $request->get_param('id');
+    $data = $request->get_json_params();
+    $tabla = $wpdb->prefix . 'igsclac_eventos';
+
+    if (isset($data['habilitado'])) {
+        $habilitado = $data['habilitado'];
+        // Convertir explícitamente a boolean y luego a int
+        if (is_bool($habilitado)) {
+            $new = $habilitado ? 1 : 0;
+        } else if (is_string($habilitado)) {
+            $new = ($habilitado === 'true' || $habilitado === '1') ? 1 : 0;
+        } else {
+            $new = (int) $habilitado;
+        }
+    } else {
+        $current = $wpdb->get_var( $wpdb->prepare("SELECT habilitado FROM $tabla WHERE id = %s", $id) );
+        $new = $current ? 0 : 1;
+    }
+
+    $wpdb->update($tabla, array('habilitado' => $new), array('id' => $id));
+    return rest_ensure_response(array('success' => true, 'habilitado' => (bool) $new));
 }
 
 function igsclac_obtener_registros($request) {
@@ -337,7 +401,7 @@ function igsclac_sembrar_datos_iniciales() {
                 'comite' => 'Facultad de Ingeniería, Comité de Tecnología',
                 'lugar' => 'Auditorio Principal', 'direccion' => 'Carrera 7 #12-45, Tuluá',
                 'capacidad' => 200, 'imagen' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800',
-                'enlace' => 'https://igsclac.com/muestra-tec', 'registro_habilitado' => 0, 'eje_tematico' => null
+                'enlace' => 'https://igsclac.com/muestra-tec', 'registro_habilitado' => 0, 'habilitado' => 1, 'eje_tematico' => null
             ),
             array(
                 'id' => 'e_3', 'tipo' => 'investigacion', 'titulo' => 'Conferencia Internacional de Ciencias',
@@ -348,7 +412,7 @@ function igsclac_sembrar_datos_iniciales() {
                 'comite' => 'Vicerrectoría de Investigación',
                 'lugar' => 'Auditorio Mayor', 'direccion' => 'Calle 10 #5-23, Tuluá',
                 'capacidad' => 150, 'imagen' => 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=800',
-                'enlace' => 'https://facebook.com/igsclac', 'registro_habilitado' => 1,
+                'enlace' => 'https://facebook.com/igsclac', 'registro_habilitado' => 1, 'habilitado' => 1,
                 'eje_tematico' => 'Sostenibilidad y desarrollo regional'
             ),
             array(
@@ -360,7 +424,7 @@ function igsclac_sembrar_datos_iniciales() {
                 'comite' => 'Centro de Investigaciones IGSCLAC',
                 'lugar' => 'Sala de conferencias B', 'direccion' => 'Carrera 7 #12-45, Tuluá',
                 'capacidad' => 80, 'imagen' => 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800',
-                'enlace' => 'https://instagram.com/igsclac', 'registro_habilitado' => 1,
+                'enlace' => 'https://instagram.com/igsclac', 'registro_habilitado' => 1, 'habilitado' => 1,
                 'eje_tematico' => 'Innovación social y tecnología'
             )
         );
