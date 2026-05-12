@@ -21,6 +21,7 @@ let state = {
   pageHome: 1,
   pageAcad: 1,
   pageInv: 1,
+  filterHome: 'active',  // 'active' | 'past'
   filterAcad: 'active',  // 'active' | 'past' | 'drafts'
   filterInv: 'active',   // 'active' | 'past' | 'drafts'
   filterAdminAcad: 'all', // 'all' | 'active' | 'past' | 'drafts'
@@ -396,7 +397,8 @@ async function renderHome(c) {
   const inv = await cargarEventos('investigación', true);
   let all = [...acad, ...inv].sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
 
-  all = all.filter(e => e.habilitado !== false);
+  // Filtrar por estado (activos, pasados)
+  all = filterEventsByStatus(all, state.filterHome);
 
   // Aplicar búsqueda si existe
   if (state.search) {
@@ -408,13 +410,31 @@ async function renderHome(c) {
   const start = (state.pageHome - 1) * PER_PAGE;
   const paginatedEvents = all.slice(start, start + PER_PAGE);
 
+  const filterButtons = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-circle-check"></i> Activos
+      </button>
+      <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-calendar-check"></i> Pasados
+      </button>
+    </div>
+  `;
+
   c.innerHTML = `
     <div class="section-title"><h2><i class="fa-solid fa-star"></i> Bienvenidos al portal de eventos</h2></div>
     <p style="margin-bottom:24px;color:var(--text-soft)">Explora todos los eventos académicos y de investigación de IGSCLAC. Mantente al día con la agenda institucional y regístrate en los eventos disponibles.</p>
     <div class="section-title"><h2>Todos los eventos${state.search ? ` · resultados para "${esc(state.search)}"` : ''}</h2></div>
-    ${paginatedEvents.length ? `<div class="events-grid">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No se encontraron eventos.')}
+    ${filterButtons}
+    ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No se encontraron eventos.')}
     ${paginationHtml(state.pageHome, totalPages, 'home')}
   `;
+}
+
+function setHomeFilter(filterValue) {
+  state.filterHome = filterValue;
+  state.pageHome = 1;
+  render();
 }
 
 async function renderEventList(c, tipo) {
