@@ -279,7 +279,7 @@ function paginationHtml(currentPage, totalPages, context) {
     </button>`;
 
   return `
-    <nav class="pagination" aria-label="Paginación">
+    <nav id="pagination-${context}" class="pagination" aria-label="Paginación">
       ${btn('<i class="fa-solid fa-chevron-left"></i>', currentPage - 1, currentPage <= 1, false, 'Página anterior')}
       ${pages.map(p => p === '…'
     ? `<span class="pagination-ellipsis">…</span>`
@@ -293,8 +293,55 @@ async function goPage(context, page) {
   if (context === 'home') state.pageHome = page;
   if (context === 'acad') state.pageAcad = page;
   if (context === 'inv') state.pageInv = page;
-  await render();
-  document.getElementById('content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (context === 'admin-acad') state.pageAdminAcad = page;
+  if (context === 'admin-inv') state.pageAdminInv = page;
+  
+  // Para admin, actualizar solo la tabla correspondiente sin hacer render() completo
+  if (context === 'admin-acad' || context === 'admin-inv') {
+    const filtered = context === 'admin-acad' 
+      ? (state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad))
+      : (state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv));
+    
+    const sortOrder = context === 'admin-acad' ? currentAcademicSort : currentResearchSort;
+    const sorted = sortEvents(filtered, sortOrder);
+    const tipoKey = context === 'admin-acad' ? 'acad' : 'inv';
+    
+    const totalPages = Math.ceil(sorted.length / PER_PAGE);
+    const start = (page - 1) * PER_PAGE;
+    const paginated = sorted.slice(start, start + PER_PAGE);
+    
+    const newHtml = await adminTable(paginated, tipoKey);
+    const paginationHtmlString = paginationHtml(page, totalPages, context);
+    
+    if (context === 'admin-acad') {
+      const container = document.getElementById('academic-table-container');
+      const paginationEl = document.getElementById('pagination-admin-acad');
+      if (container) {
+        container.innerHTML = newHtml;
+        if (paginationEl) {
+          paginationEl.outerHTML = paginationHtmlString;
+        } else {
+          container.insertAdjacentHTML('afterend', paginationHtmlString);
+        }
+      }
+    } else {
+      const container = document.getElementById('research-table-container');
+      const paginationEl = document.getElementById('pagination-admin-inv');
+      if (container) {
+        container.innerHTML = newHtml;
+        if (paginationEl) {
+          paginationEl.outerHTML = paginationHtmlString;
+        } else {
+          container.insertAdjacentHTML('afterend', paginationHtmlString);
+        }
+      }
+    }
+    
+    document.getElementById('content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    await render();
+    document.getElementById('content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 let slideIdx = 0;
@@ -1154,15 +1201,31 @@ async function renderAdmin(c) {
   cachedAcademicEvents = acad;
   cachedResearchEvents = inv;
 
+  // Procesar eventos académicos con paginación
   let sortedAcad = sortEvents(acad, currentAcademicSort);
+  sortedAcad = state.filterAdminAcad === 'all' ? sortedAcad : filterEventsByStatus(sortedAcad, state.filterAdminAcad);
+  
+  const totalAcad = sortedAcad.length;
+  const totalPagesAcad = Math.ceil(totalAcad / PER_PAGE);
+  let currentPageAcad = Math.min(state.pageAdminAcad, totalPagesAcad || 1);
+  if (currentPageAcad < 1) currentPageAcad = 1;
+  state.pageAdminAcad = currentPageAcad;
+  
+  const startAcad = (currentPageAcad - 1) * PER_PAGE;
+  const paginatedAcad = sortedAcad.slice(startAcad, startAcad + PER_PAGE);
+
+  // Procesar eventos de investigación con paginación
   let sortedInv = sortEvents(inv, currentResearchSort);
-
-  // Aplicar filtros de estado
-  sortedAcad = filterEventsByStatus(sortedAcad, state.filterAdminAcad === 'all' ? 'active' : state.filterAdminAcad);
-  if (state.filterAdminAcad === 'all') sortedAcad = acad;
-
-  sortedInv = filterEventsByStatus(sortedInv, state.filterAdminInv === 'all' ? 'active' : state.filterAdminInv);
-  if (state.filterAdminInv === 'all') sortedInv = inv;
+  sortedInv = state.filterAdminInv === 'all' ? sortedInv : filterEventsByStatus(sortedInv, state.filterAdminInv);
+  
+  const totalInv = sortedInv.length;
+  const totalPagesInv = Math.ceil(totalInv / PER_PAGE);
+  let currentPageInv = Math.min(state.pageAdminInv, totalPagesInv || 1);
+  if (currentPageInv < 1) currentPageInv = 1;
+  state.pageAdminInv = currentPageInv;
+  
+  const startInv = (currentPageInv - 1) * PER_PAGE;
+  const paginatedInv = sortedInv.slice(startInv, startInv + PER_PAGE);
 
   let totalRegs = 0;
   for (const e of [...acad, ...inv]) {
@@ -1170,8 +1233,8 @@ async function renderAdmin(c) {
     totalRegs += regs.length;
   }
 
-  const acadTableHtml = await adminTable(sortedAcad, 'acad');
-  const invTableHtml = await adminTable(sortedInv, 'inv');
+  const acadTableHtml = await adminTable(paginatedAcad, 'acad');
+  const invTableHtml = await adminTable(paginatedInv, 'inv');
 
   const filterButtonsAcad = `
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -1218,7 +1281,7 @@ async function renderAdmin(c) {
         </div>
         
         <div class="section-title">
-            <h2><i class="fa-solid fa-book"></i> Eventos académicos</h2>
+            <h2><i class="fa-solid fa-book"></i> Eventos académicos (${totalAcad})</h2>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select id="sort-academic" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
                     <option value="date_desc" ${currentAcademicSort === 'date_desc' ? 'selected' : ''}>Fecha ↓ (reciente → antiguo)</option>
@@ -1231,9 +1294,10 @@ async function renderAdmin(c) {
         </div>
         ${filterButtonsAcad}
         <div id="academic-table-container" style="margin-top:16px">${acadTableHtml}</div>
+        ${paginationHtml(currentPageAcad, totalPagesAcad, 'admin-acad')}
         
         <div class="section-title" style="margin-top:40px">
-            <h2><i class="fa-solid fa-flask"></i> Eventos de investigación</h2>
+            <h2><i class="fa-solid fa-flask"></i> Eventos de investigación (${totalInv})</h2>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select id="sort-research" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
                     <option value="date_desc" ${currentResearchSort === 'date_desc' ? 'selected' : ''}>Fecha ↓ (reciente → antiguo)</option>
@@ -1246,6 +1310,7 @@ async function renderAdmin(c) {
         </div>
         ${filterButtonsInv}
         <div id="research-table-container" style="margin-top:16px">${invTableHtml}</div>
+        ${paginationHtml(currentPageInv, totalPagesInv, 'admin-inv')}
     `;
 
   const sortAcademicSelect = document.getElementById('sort-academic');
@@ -1253,18 +1318,50 @@ async function renderAdmin(c) {
 
   const updateAcademicTable = async () => {
     currentAcademicSort = sortAcademicSelect.value;
+    state.pageAdminAcad = 1; // Resetear a página 1 al cambiar ordenamiento
     const filtered = state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad);
     const sorted = sortEvents(filtered, currentAcademicSort);
-    const newHtml = await adminTable(sorted, 'acad');
-    document.getElementById('academic-table-container').innerHTML = newHtml;
+    
+    const totalPages = Math.ceil(sorted.length / PER_PAGE);
+    const start = 0;
+    const paginated = sorted.slice(start, start + PER_PAGE);
+    
+    const newHtml = await adminTable(paginated, 'acad');
+    const paginationHtmlString = paginationHtml(1, totalPages, 'admin-acad');
+    const container = document.getElementById('academic-table-container');
+    const paginationEl = document.getElementById('pagination-admin-acad');
+    if (container) {
+      container.innerHTML = newHtml;
+      if (paginationEl) {
+        paginationEl.outerHTML = paginationHtmlString;
+      } else {
+        container.insertAdjacentHTML('afterend', paginationHtmlString);
+      }
+    }
   };
 
   const updateResearchTable = async () => {
     currentResearchSort = sortResearchSelect.value;
+    state.pageAdminInv = 1; // Resetear a página 1 al cambiar ordenamiento
     const filtered = state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv);
     const sorted = sortEvents(filtered, currentResearchSort);
-    const newHtml = await adminTable(sorted, 'inv');
-    document.getElementById('research-table-container').innerHTML = newHtml;
+    
+    const totalPages = Math.ceil(sorted.length / PER_PAGE);
+    const start = 0;
+    const paginated = sorted.slice(start, start + PER_PAGE);
+    
+    const newHtml = await adminTable(paginated, 'inv');
+    const paginationHtmlString = paginationHtml(1, totalPages, 'admin-inv');
+    const container = document.getElementById('research-table-container');
+    const paginationEl = document.getElementById('pagination-admin-inv');
+    if (container) {
+      container.innerHTML = newHtml;
+      if (paginationEl) {
+        paginationEl.outerHTML = paginationHtmlString;
+      } else {
+        container.insertAdjacentHTML('afterend', paginationHtmlString);
+      }
+    }
   };
 
   sortAcademicSelect.addEventListener('change', updateAcademicTable);
@@ -1274,8 +1371,10 @@ async function renderAdmin(c) {
 function setAdminEventFilter(context, filterValue) {
   if (context === 'acad') {
     state.filterAdminAcad = filterValue;
+    state.pageAdminAcad = 1; // Resetear a página 1 al cambiar filtro
   } else if (context === 'inv') {
     state.filterAdminInv = filterValue;
+    state.pageAdminInv = 1; // Resetear a página 1 al cambiar filtro
   }
   render();
 }
@@ -1346,21 +1445,51 @@ async function toggleEventVisibility(event, id, tipoKey) {
     cachedAcademicEvents = acad;
     cachedResearchEvents = inv;
 
-    // Regenerar solo la tabla que necesita actualizar
+    // Regenerar solo la tabla que necesita actualizar (con paginación)
     if (tipoKey === 'acad') {
       let sorted = sortEvents(acad, currentAcademicSort);
       // Aplicar filtro de estado actual
       sorted = state.filterAdminAcad === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminAcad);
-      const newHtml = await adminTable(sorted, 'acad');
+      
+      const totalPages = Math.ceil(sorted.length / PER_PAGE);
+      const currentPage = Math.min(state.pageAdminAcad, totalPages || 1);
+      const start = (currentPage - 1) * PER_PAGE;
+      const paginated = sorted.slice(start, start + PER_PAGE);
+      
+      const newHtml = await adminTable(paginated, 'acad');
+      const paginationHtmlString = paginationHtml(currentPage, totalPages, 'admin-acad');
       const container = document.getElementById('academic-table-container');
-      if (container) container.innerHTML = newHtml;
+      const paginationEl = document.getElementById('pagination-admin-acad');
+      if (container) {
+        container.innerHTML = newHtml;
+        if (paginationEl) {
+          paginationEl.outerHTML = paginationHtmlString;
+        } else {
+          container.insertAdjacentHTML('afterend', paginationHtmlString);
+        }
+      }
     } else {
       let sorted = sortEvents(inv, currentResearchSort);
       // Aplicar filtro de estado actual
       sorted = state.filterAdminInv === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminInv);
-      const newHtml = await adminTable(sorted, 'inv');
+      
+      const totalPages = Math.ceil(sorted.length / PER_PAGE);
+      const currentPage = Math.min(state.pageAdminInv, totalPages || 1);
+      const start = (currentPage - 1) * PER_PAGE;
+      const paginated = sorted.slice(start, start + PER_PAGE);
+      
+      const newHtml = await adminTable(paginated, 'inv');
+      const paginationHtmlString = paginationHtml(currentPage, totalPages, 'admin-inv');
       const container = document.getElementById('research-table-container');
-      if (container) container.innerHTML = newHtml;
+      const paginationEl = document.getElementById('pagination-admin-inv');
+      if (container) {
+        container.innerHTML = newHtml;
+        if (paginationEl) {
+          paginationEl.outerHTML = paginationHtmlString;
+        } else {
+          container.insertAdjacentHTML('afterend', paginationHtmlString);
+        }
+      }
     }
   } catch (err) {
     toast('Error al cambiar visibilidad: ' + err.message, 'error');
