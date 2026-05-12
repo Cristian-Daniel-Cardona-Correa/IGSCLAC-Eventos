@@ -21,6 +21,10 @@ let state = {
   pageHome: 1,
   pageAcad: 1,
   pageInv: 1,
+  filterAcad: 'active',  // 'active' | 'past' | 'drafts'
+  filterInv: 'active',   // 'active' | 'past' | 'drafts'
+  filterAdminAcad: 'all', // 'all' | 'active' | 'past' | 'drafts'
+  filterAdminInv: 'all',  // 'all' | 'active' | 'past' | 'drafts'
 };
 
 const savedView = localStorage.getItem('igsclac_view');
@@ -73,6 +77,30 @@ function sortRegistros(registros, sortBy) {
     sorted.sort((a, b) => b.apellidos.localeCompare(a.apellidos));
   }
   return sorted;
+}
+
+// ---------- CLASIFICACIÓN DE EVENTOS ----------
+function isEventPast(fechaFin) {
+  if (!fechaFin) return false;
+  const today = new Date(new Date().toDateString());
+  const eventEnd = new Date(fechaFin + 'T00:00:00');
+  return eventEnd < today;
+}
+
+function isEventDraft(habilitado, fechaFin) {
+  if (habilitado !== false) return false; // No es borrador si está habilitado
+  return !isEventPast(fechaFin); // Es borrador si está deshabilitado y NO es pasado
+}
+
+function filterEventsByStatus(events, status) {
+  if (status === 'active') {
+    return events.filter(e => e.habilitado !== false && !isEventPast(e.fechaFin || e.fechaInicio));
+  } else if (status === 'past') {
+    return events.filter(e => isEventPast(e.fechaFin || e.fechaInicio));
+  } else if (status === 'drafts') {
+    return events.filter(e => isEventDraft(e.habilitado, e.fechaFin || e.fechaInicio));
+  }
+  return events;
 }
 
 function downloadAttendeesCSV(registros, eventoTitle) {
@@ -382,6 +410,7 @@ async function renderEventList(c, tipo) {
   const isAcad = tipo === 'académico';
   const page = isAcad ? state.pageAcad : state.pageInv;
   const context = isAcad ? 'acad' : 'inv';
+  const filter = isAcad ? state.filterAcad : state.filterInv;
 
   setBreadcrumbs([
     { view: 'home', label: 'Inicio' },
@@ -389,7 +418,10 @@ async function renderEventList(c, tipo) {
   ]);
 
   try {
-    let all = await cargarEventos(tipo);
+    let all = await cargarEventos(tipo, true); // Cargar incluyendo deshabilitados
+
+    // Filtrar por estado (activos, pasados, borradores)
+    all = filterEventsByStatus(all, filter);
 
     if (state.search) {
       all = all.filter(e => e.titulo.toLowerCase().includes(state.search));
@@ -409,18 +441,41 @@ async function renderEventList(c, tipo) {
     const start = (currentPage - 1) * PER_PAGE;
     const paginatedEvents = all.slice(start, start + PER_PAGE);
 
+    const filterButtons = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-circle-check"></i> Activos
+        </button>
+        <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-calendar-check"></i> Pasados
+        </button>
+      </div>
+    `;
+
     c.innerHTML = `
       <div class="section-title">
         <h2><i class="fa-solid fa-${isAcad ? 'book' : 'flask'}"></i> Eventos ${isAcad ? 'Académicos' : 'de Investigación'}</h2>
         ${state.role === 'admin' ? `<button class="btn" onclick="openEventForm('${isAcad ? 'académico' : 'investigación'}')"><i class="fa-solid fa-plus"></i> Nuevo evento</button>` : ''}
       </div>
-      ${paginatedEvents.length ? `<div class="events-grid">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No hay eventos disponibles en este momento.')}
+      ${filterButtons}
+      ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No hay eventos disponibles en este momento.')}
       ${paginationHtml(currentPage, totalPages, context)}
     `;
   } catch (err) {
     console.error(err);
     c.innerHTML = emptyHtml('Error al cargar eventos.');
   }
+}
+
+function setEventFilter(context, filterValue) {
+  if (context === 'acad') {
+    state.filterAcad = filterValue;
+  } else if (context === 'inv') {
+    state.filterInv = filterValue;
+  }
+  state.pageAcad = 1;
+  state.pageInv = 1;
+  render();
 }
 
 function emptyHtml(msg) { return `<div class="empty"><i class="fa-regular fa-calendar-xmark"></i><p>${esc(msg)}</p></div>`; }
@@ -1069,6 +1124,13 @@ async function renderAdmin(c) {
   let sortedAcad = sortEvents(acad, currentAcademicSort);
   let sortedInv = sortEvents(inv, currentResearchSort);
 
+  // Aplicar filtros de estado
+  sortedAcad = filterEventsByStatus(sortedAcad, state.filterAdminAcad === 'all' ? 'active' : state.filterAdminAcad);
+  if (state.filterAdminAcad === 'all') sortedAcad = acad;
+  
+  sortedInv = filterEventsByStatus(sortedInv, state.filterAdminInv === 'all' ? 'active' : state.filterAdminInv);
+  if (state.filterAdminInv === 'all') sortedInv = inv;
+
   let totalRegs = 0;
   for (const e of [...acad, ...inv]) {
     const regs = await cargarRegistros(e.id);
@@ -1077,6 +1139,40 @@ async function renderAdmin(c) {
 
   const acadTableHtml = await adminTable(sortedAcad, 'acad');
   const invTableHtml = await adminTable(sortedInv, 'inv');
+
+  const filterButtonsAcad = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn ${state.filterAdminAcad === 'all' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('acad','all')" style="${state.filterAdminAcad === 'all' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-list"></i> Todos
+      </button>
+      <button class="btn ${state.filterAdminAcad === 'active' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('acad','active')" style="${state.filterAdminAcad === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-circle-check"></i> Activos
+      </button>
+      <button class="btn ${state.filterAdminAcad === 'past' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('acad','past')" style="${state.filterAdminAcad === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-calendar-check"></i> Pasados
+      </button>
+      <button class="btn ${state.filterAdminAcad === 'drafts' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('acad','drafts')" style="${state.filterAdminAcad === 'drafts' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-file-pen"></i> Borradores
+      </button>
+    </div>
+  `;
+
+  const filterButtonsInv = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn ${state.filterAdminInv === 'all' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('inv','all')" style="${state.filterAdminInv === 'all' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-list"></i> Todos
+      </button>
+      <button class="btn ${state.filterAdminInv === 'active' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('inv','active')" style="${state.filterAdminInv === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-circle-check"></i> Activos
+      </button>
+      <button class="btn ${state.filterAdminInv === 'past' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('inv','past')" style="${state.filterAdminInv === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-calendar-check"></i> Pasados
+      </button>
+      <button class="btn ${state.filterAdminInv === 'drafts' ? '' : 'btn-secondary'}" onclick="setAdminEventFilter('inv','drafts')" style="${state.filterAdminInv === 'drafts' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-file-pen"></i> Borradores
+      </button>
+    </div>
+  `;
 
   c.innerHTML = `
         <div class="section-title"><h2><i class="fa-solid fa-gauge"></i> Panel de Administración</h2></div>
@@ -1090,7 +1186,7 @@ async function renderAdmin(c) {
         
         <div class="section-title">
             <h2><i class="fa-solid fa-book"></i> Eventos académicos</h2>
-            <div style="display:flex; gap:10px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select id="sort-academic" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
                     <option value="date_desc" ${currentAcademicSort === 'date_desc' ? 'selected' : ''}>Fecha ↓ (reciente → antiguo)</option>
                     <option value="date_asc" ${currentAcademicSort === 'date_asc' ? 'selected' : ''}>Fecha ↑ (antiguo → reciente)</option>
@@ -1100,11 +1196,12 @@ async function renderAdmin(c) {
                 <button class="btn" onclick="openEventForm('académico')"><i class="fa-solid fa-plus"></i> Nuevo</button>
             </div>
         </div>
-        <div id="academic-table-container">${acadTableHtml}</div>
+        ${filterButtonsAcad}
+        <div id="academic-table-container" style="margin-top:16px">${acadTableHtml}</div>
         
         <div class="section-title" style="margin-top:40px">
             <h2><i class="fa-solid fa-flask"></i> Eventos de investigación</h2>
-            <div style="display:flex; gap:10px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select id="sort-research" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
                     <option value="date_desc" ${currentResearchSort === 'date_desc' ? 'selected' : ''}>Fecha ↓ (reciente → antiguo)</option>
                     <option value="date_asc" ${currentResearchSort === 'date_asc' ? 'selected' : ''}>Fecha ↑ (antiguo → reciente)</option>
@@ -1114,7 +1211,8 @@ async function renderAdmin(c) {
                 <button class="btn" onclick="openEventForm('investigación')"><i class="fa-solid fa-plus"></i> Nuevo</button>
             </div>
         </div>
-        <div id="research-table-container">${invTableHtml}</div>
+        ${filterButtonsInv}
+        <div id="research-table-container" style="margin-top:16px">${invTableHtml}</div>
     `;
 
   const sortAcademicSelect = document.getElementById('sort-academic');
@@ -1122,20 +1220,31 @@ async function renderAdmin(c) {
 
   const updateAcademicTable = async () => {
     currentAcademicSort = sortAcademicSelect.value;
-    const sorted = sortEvents(cachedAcademicEvents, currentAcademicSort);
+    const filtered = state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad);
+    const sorted = sortEvents(filtered, currentAcademicSort);
     const newHtml = await adminTable(sorted, 'acad');
     document.getElementById('academic-table-container').innerHTML = newHtml;
   };
 
   const updateResearchTable = async () => {
     currentResearchSort = sortResearchSelect.value;
-    const sorted = sortEvents(cachedResearchEvents, currentResearchSort);
+    const filtered = state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv);
+    const sorted = sortEvents(filtered, currentResearchSort);
     const newHtml = await adminTable(sorted, 'inv');
     document.getElementById('research-table-container').innerHTML = newHtml;
   };
 
   sortAcademicSelect.addEventListener('change', updateAcademicTable);
   sortResearchSelect.addEventListener('change', updateResearchTable);
+}
+
+function setAdminEventFilter(context, filterValue) {
+  if (context === 'acad') {
+    state.filterAdminAcad = filterValue;
+  } else if (context === 'inv') {
+    state.filterAdminInv = filterValue;
+  }
+  render();
 }
 
 async function adminTable(list, tipoKey) {
