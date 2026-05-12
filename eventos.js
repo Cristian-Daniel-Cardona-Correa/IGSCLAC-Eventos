@@ -589,8 +589,9 @@ async function openEventDetail(id, tipoKey) {
   const e = eventos.find(x => x.id === id);
   if (!e) return;
   const originalRegistros = await cargarRegistros(id);
-  const pct = Math.min(100, Math.round((originalRegistros.length / e.capacidad) * 100));
-  const lleno = originalRegistros.length >= e.capacidad;
+  const totalAsistentes = originalRegistros.length + (e.asistentes_manuales || 0);
+  const pct = Math.min(100, Math.round((totalAsistentes / e.capacidad) * 100));
+  const lleno = totalAsistentes >= e.capacidad;
   const mapsQ = encodeURIComponent(e.direccion || e.lugar || 'Tuluá');
 
   const horaIni = formatTime(e.horaInicio);
@@ -608,6 +609,11 @@ async function openEventDetail(id, tipoKey) {
 
   const renderAttendeesTable = (registros, sortOrder) => {
     const sorted = sortRegistros(registros, sortOrder);
+    // Si no hay registros y el registro está deshabilitado, no mostrar nada
+    if (!sorted.length && !e.registroHabilitado) {
+      return '';
+    }
+    // Si no hay registros pero el registro está habilitado, mostrar mensaje
     if (!sorted.length) {
       return '<p style="color:var(--text-soft)">Aún no hay registros.</p>';
     }
@@ -639,7 +645,7 @@ async function openEventDetail(id, tipoKey) {
             ${e.ejeTematico ? `<div><strong>Eje temático</strong>${esc(e.ejeTematico)}</div>` : ''}
             <div><strong>Lugar</strong>${esc(e.lugar)}</div>
             <div><strong>Comité organizador</strong>${esc(e.comite)}</div>
-            <div class="${lleno ? 'capacity-full' : ''}"><strong>Capacidad</strong>${originalRegistros.length}/${e.capacidad}<div class="capacity-bar ${lleno ? 'full' : ''}"><div style="width:${pct}%"></div></div></div>
+            <div class="${lleno ? 'capacity-full' : ''}"><strong>Capacidad</strong>${totalAsistentes}/${e.capacidad}<div class="capacity-bar ${lleno ? 'full' : ''}"><div style="width:${pct}%"></div></div></div>
             ${e.enlace ? `<div><strong>Enlace</strong><a href="${esc(e.enlace)}" target="_blank" rel="noopener">Abrir <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>` : ''}
         </div>
         <div class="detail-map">
@@ -647,7 +653,7 @@ async function openEventDetail(id, tipoKey) {
         </div>
         ${state.role === 'admin' ? `
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
-            <h4 style="color:var(--primary); margin:0"><i class="fa-solid fa-clipboard-list"></i> Asistentes registrados (${originalRegistros.length})</h4>
+            <h4 style="color:var(--primary); margin:0"><i class="fa-solid fa-clipboard-list"></i> Asistentes registrados (${totalAsistentes})</h4>
             <div style="display:flex; gap:8px;">
               <select id="sort-attendees" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary); width:auto;">
                 <option value="default">Orden por defecto</option>
@@ -1189,12 +1195,6 @@ async function renderAdmin(c) {
 
   cachedAcademicEvents = acad;
   cachedResearchEvents = inv;
-  
-  // Debug: verificar que asistentes_manuales está en los datos
-  if (acad.length > 0) {
-    console.log('Primer evento académico:', acad[0]);
-    console.log('¿Tiene asistentes_manuales?', 'asistentes_manuales' in acad[0]);
-  }
 
   // Procesar eventos académicos con paginación
   let sortedAcad = sortEvents(acad, currentAcademicSort);
