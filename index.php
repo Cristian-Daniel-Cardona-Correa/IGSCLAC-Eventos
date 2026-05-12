@@ -76,8 +76,6 @@
                 </li>
                 <li id="nav-admin" style="display:none"><a href="#" onclick="navigate('admin');return false;"><i
                             class="fa-solid fa-gear"></i> Panel Admin</a></li>
-                <li><a href="#" onclick="navigate('contacto');return false;"><i class="fa-solid fa-envelope"></i>
-                        Contacto</a></li>
             </ul>
         </div>
     </nav>
@@ -131,20 +129,9 @@
                     <p style="margin-top:8px;font-size:13px;color:var(--text-soft)">IGSCLAC — Centro Internacional de Ciencia Verde para Latinoamérica y el Caribe</p>
                 </div>
                 <div>
-                    <h4><i class="fa-solid fa-phone"></i> Contacto</h4>
-                    <ul>
-                        <li><i class="fa-solid fa-envelope"></i> eventos@igsclac.com</li>
-                        <li><i class="fa-solid fa-phone"></i> +57 (2) 224 5555</li>
-                        <li><i class="fa-brands fa-whatsapp"></i> +57 300 123 4567</li>
-                    </ul>
+                    <h4><i class="fa-brands fa-instagram"></i> Síguenos</h4>
                     <div class="social">
-                        <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                        <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
-                        <a href="#" aria-label="TikTok"><i class="fa-brands fa-tiktok"></i></a>
-                        <a href="#" aria-label="X"><i class="fa-brands fa-x-twitter"></i></a>
-                        <a href="#" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
-                        <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
-                        <a href="mailto:eventos@igsclac.com" aria-label="Gmail"><i class="fa-solid fa-envelope"></i></a>
+                        <a href="https://www.instagram.com/cienciaverde.co/" target="_blank" rel="noopener" aria-label="Instagram"><i class="fa-brands fa-instagram"></i> Instagram</a>
                     </div>
                 </div>
                 <div>
@@ -154,7 +141,6 @@
                         <li><a href="#" onclick="navigate('academicos');return false;">Eventos académicos</a></li>
                         <li><a href="#" onclick="navigate('investigacion');return false;">Eventos de investigación</a>
                         </li>
-                        <li><a href="#" onclick="navigate('contacto');return false;">Contacto</a></li>
                     </ul>
                 </div>
             </div>
