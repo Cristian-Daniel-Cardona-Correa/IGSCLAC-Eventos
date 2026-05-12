@@ -1384,11 +1384,11 @@ async function adminTable(list, tipoKey) {
         </td>
         <td>${esc(e.titulo)}</td>
         <td>${fmtDate(e.fechaInicio)}</td>
-        <td>${esc(e.tipoEvento)}</td>
-        <td>${e.capacidad}</td>
-        <td><strong>${rCount}</strong></td>
-        <td>${e.registroHabilitado ? '<span style="color:var(--secondary);font-weight:700">Sí</span>' : 'No'}</td>
-        <td>
+        <td style="text-align:center">${esc(e.tipoEvento)}</td>
+        <td style="text-align:center">${e.capacidad}</td>
+        <td style="text-align:center"><strong>${rCount}</strong></td>
+        <td style="text-align:center">${e.registroHabilitado ? '<span style="color:var(--secondary);font-weight:700">Sí</span>' : 'No'}</td>
+        <td style="text-align:center">
           <div class="action-buttons">
             <button class="btn btn-sm btn-secondary" onclick="openEventDetail('${e.id}','${tipoKey}')"><i class="fa-solid fa-eye"></i></button>
             <button class="btn btn-sm" onclick="openEventForm('${e.tipo}','${e.id}')"><i class="fa-solid fa-pen"></i></button>
@@ -1400,7 +1400,7 @@ async function adminTable(list, tipoKey) {
     `;
   }
   return `<div class="table-wrap"><table>
-    <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th>Título</th><th>Fecha</th><th>Tipo</th><th>Capacidad</th><th>Registros</th><th>Reg. habilitado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th>Título</th><th>Fecha</th><th style="text-align:center">Tipo</th><th style="text-align:center">Capacidad</th><th style="text-align:center">Registros</th><th style="text-align:center">Reg. habilitado</th><th style="text-align:center">Acciones</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
