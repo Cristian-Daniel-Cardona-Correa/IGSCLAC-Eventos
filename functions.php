@@ -112,6 +112,24 @@ function igsclac_migrar_habilitado() {
 add_action('wp_loaded', 'igsclac_migrar_habilitado');
 
 /* ============================================================
+   2.6 DESHABILITAR EVENTOS ANTIGUOS AUTOMÁTICAMENTE
+============================================================ */
+function igsclac_deshabilitar_eventos_antiguos() {
+    global $wpdb;
+    $tabla = $wpdb->prefix . 'igsclac_eventos';
+    $today = date('Y-m-d');
+    
+    // Actualizar eventos cuya fecha_fin sea menor que hoy y estén habilitados
+    $wpdb->query(
+        $wpdb->prepare(
+            "UPDATE $tabla SET habilitado = 0 WHERE fecha_fin < %s AND habilitado = 1",
+            $today
+        )
+    );
+}
+add_action('wp_loaded', 'igsclac_deshabilitar_eventos_antiguos');
+
+/* ============================================================
    3. ENDPOINTS REST PARA EVENTOS Y REGISTROS
 ============================================================ */
 add_action('rest_api_init', function () {
