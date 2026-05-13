@@ -778,16 +778,16 @@ function downloadFullReportExcel(evento, registros) {
     ['Lugar', evento.lugar],
     ['Dirección', evento.direccion || ''],
     ['Comité organizador', evento.comite],
-    ['Capacidad', evento.capacidad],
-    ['Registros reales', registros.length],
+    ['Capacidad', String(evento.capacidad)],
+    ['Registros reales', String(registros.length)],
   );
 
   if (evento.asistentes_manuales) {
-    infoData.push(['Asistentes manuales', evento.asistentes_manuales]);
+    infoData.push(['Asistentes manuales', String(evento.asistentes_manuales)]);
   }
 
   infoData.push(
-    ['Total asistentes', totalAsistentes],
+    ['Total asistentes', String(totalAsistentes)],
     ['Registro habilitado', evento.registroHabilitado ? 'Sí' : 'No'],
   );
 
@@ -796,8 +796,20 @@ function downloadFullReportExcel(evento, registros) {
   }
 
   // Descripción con ajuste de texto automático
-  const descripcion = evento.descripcion || '';
-  infoData.push(['Descripción', descripcion]);
+  const MAX_CHARS = 80;
+  const palabras = (evento.descripcion || '').split(' ');
+  const lineas = [];
+  let lineaActual = '';
+  for (const palabra of palabras) {
+    if ((lineaActual + ' ' + palabra).trim().length > MAX_CHARS) {
+      if (lineaActual) lineas.push(lineaActual);
+      lineaActual = palabra;
+    } else {
+      lineaActual = lineaActual ? lineaActual + ' ' + palabra : palabra;
+    }
+  }
+  if (lineaActual) lineas.push(lineaActual);
+  infoData.push(['Descripción', lineas.join('\n')]);
 
   // Crear hoja de información
   const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
@@ -809,14 +821,15 @@ function downloadFullReportExcel(evento, registros) {
   ];
 
   // Aplicar wrapText a la celda de descripción (fila dinámica)
-  const descRow = infoData.findIndex(row => row[0] === 'Descripción') + 1; // +1 porque AOA empieza en 1
-  if (descRow > 0) {
-    const descCell = XLSX.utils.encode_cell({ r: descRow - 1, c: 1 }); // fila en base 0
+  const descRowIdx = infoData.findIndex(row => row[0] === 'Descripción');
+  if (descRowIdx > -1) {
+    const descCell = XLSX.utils.encode_cell({ r: descRowIdx, c: 1 });
     if (wsInfo[descCell]) {
-      wsInfo[descCell].s = {
-        alignment: { wrapText: true, vertical: 'top' }
-      };
+      wsInfo[descCell].s = { alignment: { wrapText: true, vertical: 'top' } };
     }
+    
+    if (!wsInfo['!rows']) wsInfo['!rows'] = [];
+    wsInfo['!rows'][descRowIdx] = { hpt: Math.max(15, lineas.length * 15) };
   }
 
   XLSX.utils.book_append_sheet(wb, wsInfo, 'Información del Evento');
@@ -876,7 +889,7 @@ async function downloadFullReportPDF(evento, registros) {
   let y = 24;
 
   // ====== CABECERA INSTITUCIONAL ======
-  doc.setFillColor(0, 156, 26); // Color verde corporativo
+  doc.setFillColor(0, 156, 26);
   doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
@@ -936,7 +949,7 @@ async function downloadFullReportPDF(evento, registros) {
   const col1Width = 45;  // Ancho de la etiqueta
   const col2Width = pageWidth - margin * 2 - col1Width; // Ancho del valor
   const rowHeight = 7;
-  const headerColor = [0, 156, 26]; // verde
+  const headerColor = [0, 156, 26];
 
   // Dibujar encabezado de la tabla de metadatos
   doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
@@ -950,9 +963,8 @@ async function downloadFullReportPDF(evento, registros) {
 
   // Dibujar filas de metadatos
   metaRows.forEach((row, index) => {
-    // Fondo alterno para legibilidad
     if (index % 2 === 0) {
-      doc.setFillColor(245, 249, 245); // gris muy claro verdoso
+      doc.setFillColor(245, 249, 245);
     } else {
       doc.setFillColor(255, 255, 255);
     }
@@ -975,12 +987,11 @@ async function downloadFullReportPDF(evento, registros) {
     const valueLines = doc.splitTextToSize(row[1], col2Width - 4);
     doc.text(valueLines, margin + col1Width + 2, y + 5);
 
-    // Aumentar la altura de la fila si el texto ocupa más de una línea
     const currentRowHeight = Math.max(rowHeight, (valueLines.length * 4.5) + 2);
     y += currentRowHeight;
   });
 
-  y += 8; // espacio después de la tabla
+  y += 8;
 
   // ====== DESCRIPCIÓN ======
   doc.setFont(undefined, 'bold');
@@ -1006,8 +1017,7 @@ async function downloadFullReportPDF(evento, registros) {
   if (registros.length > 0) {
     // Configuración de columnas de la tabla de asistentes
     const asistHeaders = ['Nombre completo', 'Identificación', 'Email', 'Cargo', 'Institución'];
-    const asistColWidths = [45, 30, 45, 30, 30]; // total: 180 (ancho página - 2 * margin = 178 aprox)
-    // Ajustamos para que cuadre exacto
+    const asistColWidths = [45, 30, 45, 30, 30];
     const totalAsistWidth = asistColWidths.reduce((a, b) => a + b, 0);
     const startX = margin + (col1Width + col2Width - totalAsistWidth) / 2; // centrar
 
@@ -1071,7 +1081,7 @@ async function downloadFullReportPDF(evento, registros) {
         });
         xPosRow += asistColWidths[i];
       });
-      y += 7; // altura de fila fija para uniformidad (si alguna fila necesita más altura, podríamos calcularla, pero con 7mm suele ser suficiente)
+      y += 7;
     });
   } else {
     y += 5;
