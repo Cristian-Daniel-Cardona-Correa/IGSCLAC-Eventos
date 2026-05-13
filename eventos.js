@@ -212,11 +212,27 @@ async function crearRegistro(data) {
 }
 
 // ---------- HERO SLIDER ----------
-const slides = [
-  { t: 'Bienvenidos a IGSCLAC Eventos', s: 'Conferencias, ferias, seminarios y mucho más para la comunidad académica.', img: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1600', cta: 'Ver eventos académicos', action: "navigate('academicos')" },
-  { t: 'Eventos de Investigación', s: 'Participa en conferencias, foros y coloquios con investigadores destacados.', img: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1600', cta: 'Explorar investigación', action: "navigate('investigacion')" },
-  { t: 'Inscríbete a nuestros eventos', s: 'Cupos limitados. Asegura tu lugar y vive la experiencia IGSCLAC.', img: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600', cta: 'Ver agenda completa', action: "navigate('home')" }
-];
+let slides = [];
+
+async function cargarHeroSlides() {
+  try {
+    const response = await fetch(API_BASE + '/hero-slides', {
+      credentials: 'same-origin'
+    });
+    if (!response.ok) throw new Error('Error cargando slides');
+    const datos = await response.json();
+    slides = datos || [];
+    if (slides.length === 0) {
+      slides = [
+        { titulo: 'Sin slides configurados', descripcion: 'Por favor, configure los slides desde el panel admin.', imagen: '', textoBoton: '', tipoAccion: 'navegacion', accion: 'home' }
+      ];
+    }
+    buildHero();
+  } catch (err) {
+    console.error('Error al cargar hero slides:', err);
+    slides = [];
+  }
+}
 
 function paginationHtml(currentPage, totalPages, context) {
   if (totalPages <= 1) return '';
@@ -296,18 +312,91 @@ async function goPage(context, page) {
 
 let slideIdx = 0;
 let heroInterval;
+
+function generarAccionSlide(slide) {
+  if (slide.tipoAccion === 'evento_pasado' && slide.accion) {
+    return { tipoAccion: 'evento_pasado', accion: slide.accion };
+  }
+  if (slide.tipoAccion === 'evento' && slide.accion) {
+    return { tipoAccion: 'evento', accion: slide.accion };
+  }
+  // Por defecto, navegación
+  return { tipoAccion: 'navegacion', accion: slide.accion };
+}
+
+async function showEventDetail(id) {
+  // Buscar el evento en académicos e investigación
+  const acad = await cargarEventos('académico', true);
+  const inv = await cargarEventos('investigación', true);
+
+  let evento = acad.find(e => e.id === id);
+  let tipoKey = 'acad';
+
+  if (!evento) {
+    evento = inv.find(e => e.id === id);
+    tipoKey = 'inv';
+  }
+
+  if (!evento) {
+    toast('Evento no encontrado', 'error');
+    return;
+  }
+
+  openEventDetail(id, tipoKey);
+}
+
+async function showPastEventDetail(id) {
+  // Buscar el evento en académicos e investigación (pasado)
+  const acad = await cargarEventos('académico', true);
+  const inv = await cargarEventos('investigación', true);
+
+  let evento = acad.find(e => e.id === id);
+  let tipoKey = 'acad';
+
+  if (!evento) {
+    evento = inv.find(e => e.id === id);
+    tipoKey = 'inv';
+  }
+
+  if (!evento) {
+    toast('Evento no encontrado', 'error');
+    return;
+  }
+
+  // Mostrar el evento aunque sea pasado
+  openEventDetail(id, tipoKey);
+}
+
 function buildHero() {
   const hero = $('#hero');
   hero.querySelectorAll('.slide').forEach(n => n.remove());
   slides.forEach((sl, i) => {
     const div = document.createElement('div');
     div.className = 'slide' + (i === 0 ? ' active' : '');
-    div.style.backgroundImage = `url('${sl.img}')`;
-    div.innerHTML = `<div class="slide-content"><h1>${esc(sl.t)}</h1><p>${esc(sl.s)}</p><a href="#" class="slide-cta" onclick="${sl.action};return false;">${esc(sl.cta)} <i class="fa-solid fa-arrow-right"></i></a></div>`;
+    div.style.backgroundImage = `url('${sl.imagen || ''}')`;
+    const accion = generarAccionSlide(sl);
+    const botonHtml = sl.textoBoton ? `<a href="#" class="slide-cta" data-accion-tipo="${accion.tipoAccion}" data-accion-valor="${esc(accion.accion)}">${esc(sl.textoBoton)} <i class="fa-solid fa-arrow-right"></i></a>` : '';
+    div.innerHTML = `<div class="slide-content"><h1>${esc(sl.titulo)}</h1><p>${esc(sl.descripcion)}</p>${botonHtml}</div>`;
     hero.insertBefore(div, $('#hero-dots'));
   });
   const dots = $('#hero-dots'); dots.innerHTML = '';
   slides.forEach((_, i) => { const s = document.createElement('span'); s.className = i === 0 ? 'active' : ''; s.onclick = () => goSlide(i); dots.appendChild(s); });
+
+  // Agregar botón de editar para admin
+  const heroEditBtn = document.getElementById('hero-edit-btn');
+  if (heroEditBtn) heroEditBtn.remove();
+
+  if (state.role === 'admin') {
+    const btnEdit = document.createElement('button');
+    btnEdit.id = 'hero-edit-btn';
+    btnEdit.className = 'btn';
+    btnEdit.innerHTML = '<i class="fa-solid fa-edit"></i>';
+    btnEdit.title = 'Editar hero slider';
+    btnEdit.onclick = () => abrirEditorHeroSlides();
+    btnEdit.style.cssText = 'position:absolute;top:20px;right:20px;z-index:100;background:rgba(255,255,255,0.9);color:var(--primary);border:none;cursor:pointer;padding:10px 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;width:44px;height:44px;';
+    hero.style.position = 'relative';
+    hero.appendChild(btnEdit);
+  }
 
   // --- Soporte de swipe para móviles ---
   const heroEl = $('#hero');
@@ -827,7 +916,7 @@ function downloadFullReportExcel(evento, registros) {
     if (wsInfo[descCell]) {
       wsInfo[descCell].s = { alignment: { wrapText: true, vertical: 'top' } };
     }
-    
+
     if (!wsInfo['!rows']) wsInfo['!rows'] = [];
     wsInfo['!rows'][descRowIdx] = { hpt: Math.max(15, lineas.length * 15) };
   }
@@ -1102,6 +1191,274 @@ async function downloadFullReportPDF(evento, registros) {
 
   doc.save(`informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
   toast('Informe PDF descargado');
+}
+
+// ---------- HERO SLIDER (ADMIN) ----------
+async function guardarHeroSlides(slides) {
+  try {
+    const response = await fetchAPI('/hero-slides', {
+      method: 'POST',
+      body: { slides: slides }
+    });
+    toast('Hero slider actualizado correctamente', 'success');
+    // Recargar los slides
+    await cargarHeroSlides();
+    buildHero();
+    return response;
+  } catch (err) {
+    toast('Error al guardar hero slider: ' + err.message, 'error');
+    throw err;
+  }
+}
+
+function abrirEditorHeroSlides() {
+  if (state.role !== 'admin') { toast('Solo el administrador puede editar el hero', 'error'); return; }
+
+  const modal = `
+    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:30px;">
+        <style>
+          #hero-editor-modal .form-group div[style*="display:flex"] {
+            flex-wrap: wrap;
+          }
+          #hero-editor-modal .form-group .field-error {
+            width: 100%;
+            margin-top: 4px;
+          }
+        </style>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2 style="margin:0;color:var(--primary)">Editar Hero Slider</h2>
+          <button onclick="document.getElementById('hero-editor-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;">&times;</button>
+        </div>
+        <div id="hero-editor-content"></div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+          <button onclick="document.getElementById('hero-editor-modal').remove()" class="btn btn-secondary">Cancelar</button>
+          <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modal);
+  renderHeroSliderEditor();
+}
+
+async function renderHeroSliderEditor() {
+  const content = document.getElementById('hero-editor-content');
+  const slidesEditor = document.getElementById('hero-slides-editor');
+
+  if (slidesEditor) {
+    slidesEditor.remove();
+  }
+
+  // Cargar todos los eventos
+  const acad = await cargarEventos('académico', true);
+  const inv = await cargarEventos('investigación', true);
+  const todosEventos = [...acad, ...inv];
+
+  let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
+
+  slides.forEach((slide, i) => {
+    html += `
+      <div style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+          <h3 style="margin:0;color:var(--primary)">Slide ${i + 1}</h3>
+          <button onclick="eliminarSlideHero(${i})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
+            <i class="fa-solid fa-trash"></i> Eliminar
+          </button>
+        </div>
+        <div class="form-group">
+          <label>Título <span class="req">*</span></label>
+          <input type="text" class="slide-titulo-${i}" value="${esc(slide.titulo)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+        </div>
+        <div class="form-group">
+          <label>Descripción:</label>
+          <textarea class="slide-descripcion-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(slide.descripcion)}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Imagen: <span class="req">*</span></label>
+          <div style="display:flex; gap:8px;">
+            <input type="url" class="slide-imagen-${i}" placeholder="https://..." value="${esc(slide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${i})" title="Subir imagen desde WordPress">
+              <i class="fa-solid fa-upload"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Texto del botón:</label>
+          <input type="text" class="slide-boton-${i}" value="${esc(slide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+        </div>
+        <div class="form-group">
+          <label>Tipo de acción:</label>
+          <select class="slide-tipo-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            <option value="navegacion" ${slide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
+            <option value="evento" ${slide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
+            <option value="evento_pasado" ${slide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Acción:</label>
+          <div class="slide-accion-container-${i}">
+            ${renderAccionInput(i, slide, todosEventos)}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    <button onclick="agregarSlideHero()" class="btn" style="align-self:flex-start;">
+      <i class="fa-solid fa-plus"></i> Agregar slide
+    </button>
+  </div>`;
+
+  content.innerHTML = html;
+
+  // Agregar event listeners para cambiar tipo de acción
+  slides.forEach((_, i) => {
+    const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
+    if (tipoSelect) {
+      tipoSelect.addEventListener('change', () => {
+        const container = document.querySelector(`.slide-accion-container-${i}`);
+        const tipo = tipoSelect.value;
+        const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || slides[i].accion;
+        container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, todosEventos);
+      });
+    }
+  });
+}
+
+function renderAccionInput(index, slide, todosEventos = []) {
+  if (slide.tipoAccion === 'evento') {
+    const eventosActivos = todosEventos.filter(e => !isEventPast(e.fechaFin || e.fechaInicio) && e.habilitado !== false);
+    let optionsHtml = '<option value="">-- Selecciona un evento --</option>';
+    eventosActivos.forEach(evt => {
+      const selected = evt.id === slide.accion ? 'selected' : '';
+      const label = `${evt.titulo} (${evt.tipo === 'académico' ? 'Académico' : 'Investigación'})`;
+      optionsHtml += `<option value="${evt.id}" ${selected}>${esc(label)}</option>`;
+    });
+    return `
+      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+        ${optionsHtml}
+      </select>
+      <small style="color:#666;display:block;margin-top:5px;">Selecciona un evento activo para abrirlo al hacer clic en el botón.</small>
+    `;
+  } else if (slide.tipoAccion === 'evento_pasado') {
+    const eventosPasados = todosEventos.filter(e => isEventPast(e.fechaFin || e.fechaInicio));
+    let optionsHtml = '<option value="">-- Selecciona un evento --</option>';
+    eventosPasados.forEach(evt => {
+      const selected = evt.id === slide.accion ? 'selected' : '';
+      const label = `${evt.titulo} (${evt.tipo === 'académico' ? 'Académico' : 'Investigación'})`;
+      optionsHtml += `<option value="${evt.id}" ${selected}>${esc(label)}</option>`;
+    });
+    return `
+      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+        ${optionsHtml}
+      </select>
+      <small style="color:#666;display:block;margin-top:5px;">Selecciona un evento pasado para mostrarlo como noticia.</small>
+    `;
+  } else {
+    return `
+      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+        <option value="home" ${slide.accion === 'home' ? 'selected' : ''}>Inicio</option>
+        <option value="academicos" ${slide.accion === 'academicos' ? 'selected' : ''}>Eventos Académicos</option>
+        <option value="investigacion" ${slide.accion === 'investigacion' ? 'selected' : ''}>Eventos de Investigación</option>
+      </select>
+    `;
+  }
+}
+
+function eliminarSlideHero(index) {
+  if (slides.length <= 1) { toast('Debes tener al menos 1 slide', 'error'); return; }
+  if (!confirm('¿Eliminar este slide?')) return;
+
+  const nuevosSlides = slides.filter((_, i) => i !== index);
+  slides = nuevosSlides;
+  renderHeroSliderEditor();
+}
+
+async function agregarSlideHero() {
+  slides.push({
+    titulo: 'Nuevo slide',
+    descripcion: 'Descripción del nuevo slide',
+    imagen: '',
+    textoBoton: 'Botón',
+    tipoAccion: 'navegacion',
+    accion: 'home'
+  });
+  await renderHeroSliderEditor();
+}
+
+async function guardarHeroSlidesCambios() {
+  // 1. Limpiar todos los errores previos en el modal del editor
+  const editorModal = document.getElementById('hero-editor-modal');
+  editorModal.querySelectorAll('.field-error').forEach(el => el.remove());
+  editorModal.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
+
+  let hayErrores = false;
+
+  // 2. Validar cada slide
+
+  // Validar título de cada slide
+  slides.forEach((_, i) => {
+    const tituloInput = document.querySelector(`.slide-titulo-${i}`);
+    const titulo = tituloInput?.value?.trim() || '';
+    if (!titulo) {
+      showFieldError(tituloInput, 'El título del slide es obligatorio.');
+      hayErrores = true;
+    }
+  });
+
+  slides.forEach((_, i) => {
+    // --- Validar imagen ---
+    const imagenInput = document.querySelector(`.slide-imagen-${i}`);
+    const imagen = imagenInput?.value?.trim() || '';
+    if (!imagen) {
+      showFieldError(imagenInput, 'La imagen es obligatoria para el slide.');
+      hayErrores = true;
+    }
+
+    // --- Validar acción cuando es evento ---
+    const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
+    if (tipoAccion === 'evento' || tipoAccion === 'evento_pasado') {
+      const accionSelect = document.querySelector(`.slide-accion-${i}`);
+      const accion = accionSelect?.value || '';
+      if (!accion) {
+        showFieldError(accionSelect, 'Debes seleccionar un evento para esta acción.');
+        hayErrores = true;
+      }
+    }
+  });
+
+  // 3. Si hay errores, mostrar el primer error y detener
+  if (hayErrores) {
+    const primerError = editorModal.querySelector('.field-error');
+    if (primerError) {
+      primerError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    toast('Por favor corrige los errores antes de guardar.', 'error');
+    return;
+  }
+
+  // 4. Construir array con los valores (sin cambios respecto al original)
+  const slidesEditados = [];
+  slides.forEach((_, i) => {
+    const titulo = document.querySelector(`.slide-titulo-${i}`)?.value || '';
+    const descripcion = document.querySelector(`.slide-descripcion-${i}`)?.value || '';
+    const imagen = document.querySelector(`.slide-imagen-${i}`)?.value || '';
+    const textoBoton = document.querySelector(`.slide-boton-${i}`)?.value || '';
+    const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
+    const accion = document.querySelector(`.slide-accion-${i}`)?.value || '';
+
+    slidesEditados.push({
+      titulo, descripcion, imagen, textoBoton, tipoAccion, accion
+    });
+  });
+
+  // 5. Guardar
+  await guardarHeroSlides(slidesEditados);
+  document.getElementById('hero-editor-modal').remove();
+  await render();
 }
 
 // ---------- FORMULARIO EVENTO (ADMIN) ----------
@@ -1436,6 +1793,59 @@ async function validateAndSaveEvent(tipo, id) {
   } catch (err) {
     toast('Error al guardar: ' + err.message, 'error');
   }
+}
+
+function uploadHeroSlideImage(btn, slideIndex) {
+  if (window._igsclacMediaFrameHero) {
+    try { window._igsclacMediaFrameHero.detach(); } catch (e) { }
+    window._igsclacMediaFrameHero = null;
+  }
+
+  const frame = wp.media({
+    title: 'Seleccionar imagen para el slide',
+    button: {
+      text: 'Usar esta imagen'
+    },
+    multiple: false
+  });
+
+  window._igsclacMediaFrameHero = frame;
+
+  const userLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
+
+  if (typeof igsclacMediaNonce !== 'undefined') {
+    if (!userLoggedIn) {
+      frame.on('ready', function () {
+        const uploader = frame.uploader;
+        if (uploader && uploader.uploader && uploader.uploader.uploader) {
+          const plupload = uploader.uploader.uploader;
+          plupload.bind('BeforeUpload', function (up) {
+            up.settings.multipart_params = up.settings.multipart_params || {};
+            up.settings.multipart_params._wpnonce = igsclacMediaNonce.mediaForm;
+            up.settings.url = igsclacMediaNonce.ajaxurl + '?action=upload-attachment';
+          });
+        }
+      });
+    }
+
+    frame.on('open', function () {
+      if (!userLoggedIn && window._wpPluploadSettings) {
+        window._wpPluploadSettings.defaults = window._wpPluploadSettings.defaults || {};
+        window._wpPluploadSettings.defaults.multipart_params = window._wpPluploadSettings.defaults.multipart_params || {};
+        window._wpPluploadSettings.defaults.multipart_params._wpnonce = igsclacMediaNonce.mediaForm;
+      }
+    });
+  }
+
+  frame.on('select', function () {
+    const attachment = frame.state().get('selection').first().toJSON();
+    const input = document.querySelector(`.slide-imagen-${slideIndex}`);
+    if (input) {
+      input.value = attachment.url;
+    }
+  });
+
+  frame.open();
 }
 
 function uploadEventImage(btn) {
@@ -2039,10 +2449,29 @@ function showModal() { $('#modal-overlay').classList.add('show'); document.body.
 function closeModal() { $('#modal-overlay').classList.remove('show'); document.body.style.overflow = ''; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+// ---------- HERO ACTIONS HANDLER ----------
+document.addEventListener('click', async (e) => {
+  if (!e.target.classList.contains('slide-cta')) return;
+  e.preventDefault();
+
+  const tipoAccion = e.target.dataset.accionTipo;
+  const accionValor = e.target.dataset.accionValor;
+
+  if (tipoAccion === 'evento') {
+    await showEventDetail(accionValor);
+  } else if (tipoAccion === 'evento_pasado') {
+    await showPastEventDetail(accionValor);
+  } else {
+    navigate(accionValor);
+  }
+}, true);
+
 // ---------- FAB scroll ----------
 window.addEventListener('scroll', () => { $('#fab-top').classList.toggle('show', window.scrollY > 400); });
 
 // ---------- INIT ----------
-buildHero();
-applyRole();
+cargarHeroSlides().then(() => {
+  buildHero();
+  applyRole();
+});
 render();

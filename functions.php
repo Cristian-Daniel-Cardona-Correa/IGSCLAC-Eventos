@@ -226,6 +226,18 @@ add_action('rest_api_init', function () {
         'callback'            => 'igsclac_actualizar_asistentes_manuales',
         'permission_callback' => '__return_true'
     ));
+    // Obtener slides del hero
+    register_rest_route('igsclac/v1', '/hero-slides', array(
+        'methods'             => 'GET',
+        'callback'            => 'igsclac_obtener_hero_slides',
+        'permission_callback' => '__return_true'
+    ));
+    // Guardar slides del hero (solo admin)
+    register_rest_route('igsclac/v1', '/hero-slides', array(
+        'methods'             => 'POST',
+        'callback'            => 'igsclac_guardar_hero_slides',
+        'permission_callback' => '__return_true'
+    ));
 });
 
 function igsclac_obtener_eventos( $request ) {
@@ -682,3 +694,78 @@ add_action('wp_ajax_nopriv_igsclac-delete-attachment', function() {
         wp_send_json_error(['message' => 'No se pudo eliminar'], 500);
     }
 }, 1);
+
+/* ============================================================
+   6. HERO SLIDER PERSONALIZABLE
+============================================================ */
+
+function igsclac_obtener_hero_slides_default() {
+    return array(
+        array(
+            'titulo' => 'Bienvenidos a IGSCLAC Eventos',
+            'descripcion' => 'Conferencias, ferias, seminarios y mucho más para la comunidad académica.',
+            'imagen' => 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1600',
+            'textoBoton' => 'Ver eventos académicos',
+            'tipoAccion' => 'navegacion',
+            'accion' => 'academicos'
+        ),
+        array(
+            'titulo' => 'Eventos de Investigación',
+            'descripcion' => 'Participa en conferencias, foros y coloquios con investigadores destacados.',
+            'imagen' => 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1600',
+            'textoBoton' => 'Explorar investigación',
+            'tipoAccion' => 'navegacion',
+            'accion' => 'investigacion'
+        ),
+        array(
+            'titulo' => 'Inscríbete a nuestros eventos',
+            'descripcion' => 'Cupos limitados. Asegura tu lugar y vive la experiencia IGSCLAC.',
+            'imagen' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600',
+            'textoBoton' => 'Ver agenda completa',
+            'tipoAccion' => 'navegacion',
+            'accion' => 'home'
+        )
+    );
+}
+
+function igsclac_inicializar_hero_slides() {
+    $slides = get_option('igsclac_hero_slides');
+    if (!$slides || !is_array($slides)) {
+        $default_slides = igsclac_obtener_hero_slides_default();
+        update_option('igsclac_hero_slides', $default_slides);
+    }
+}
+add_action('wp_loaded', 'igsclac_inicializar_hero_slides');
+
+function igsclac_obtener_hero_slides() {
+    $slides = get_option('igsclac_hero_slides');
+    if (!$slides || !is_array($slides)) {
+        $slides = igsclac_obtener_hero_slides_default();
+        update_option('igsclac_hero_slides', $slides);
+    }
+    return rest_ensure_response($slides);
+}
+
+function igsclac_guardar_hero_slides($request) {
+    $data = $request->get_json_params();
+    
+    if (!isset($data['slides']) || !is_array($data['slides'])) {
+        return new WP_Error('invalid_slides', 'Los slides deben ser un array', array('status' => 400));
+    }
+
+    $slides = array();
+    foreach ($data['slides'] as $slide) {
+        $procesado = array(
+            'titulo' => sanitize_text_field($slide['titulo'] ?? ''),
+            'descripcion' => sanitize_textarea_field($slide['descripcion'] ?? ''),
+            'imagen' => esc_url_raw($slide['imagen'] ?? ''),
+            'textoBoton' => sanitize_text_field($slide['textoBoton'] ?? ''),
+            'tipoAccion' => sanitize_text_field($slide['tipoAccion'] ?? 'navegacion'),
+            'accion' => sanitize_text_field($slide['accion'] ?? '')
+        );
+        $slides[] = $procesado;
+    }
+
+    update_option('igsclac_hero_slides', $slides);
+    return rest_ensure_response(array('success' => true, 'slides' => $slides));
+}
