@@ -415,9 +415,9 @@ function buildHero() {
 
       if (Math.abs(diff) > threshold) {
         if (diff > 0) {
-          goSlide((slideIdx + 1) % slides.length);
-        } else {
           goSlide((slideIdx - 1 + slides.length) % slides.length);
+        } else {
+          goSlide((slideIdx + 1) % slides.length);
         }
       }
     }, { passive: true });
