@@ -761,11 +761,11 @@ textarea {
     border-radius: 50%
 }
 
-input:checked + .toggle-slider {
+input:checked+.toggle-slider {
     background-color: var(--secondary)
 }
 
-input:checked + .toggle-slider:before {
+input:checked+.toggle-slider:before {
     transform: translateX(24px)
 }
 
@@ -1123,17 +1123,17 @@ footer {
     width: 20px
 }
 
-.footer-grid > div:nth-child(2),
-.footer-grid > div:nth-child(3) {
+.footer-grid>div:nth-child(2),
+.footer-grid>div:nth-child(3) {
     text-align: center;
 }
 
-.footer-grid > div:nth-child(3) ul {
+.footer-grid>div:nth-child(3) ul {
     display: inline-block;
     text-align: left;
 }
 
-.footer-grid > div:nth-child(2) .social {
+.footer-grid>div:nth-child(2) .social {
     justify-content: center;
 }
 
@@ -1234,22 +1234,22 @@ footer {
     background: var(--primary)
 }
 
-.fab-wa,
-.fab-wa i {
+.fab-email,
+.fab-email i {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     line-height: 1 !important;
 }
 
-.fab-wa {
+.fab-email {
     position: fixed !important;
     right: 24px !important;
     bottom: 24px !important;
     width: 54px !important;
     height: 54px !important;
     border-radius: 50% !important;
-    background-color: #25d366 !important;
+    background-color: var(--primary) !important;
     color: #fff !important;
     text-decoration: none !important;
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2) !important;
@@ -1258,14 +1258,14 @@ footer {
     overflow: hidden !important;
 }
 
-.fab-wa i {
+.fab-email i {
     font-size: 22px !important;
     margin: 0 !important;
     padding: 0 !important;
 }
 
-.fab-wa:hover {
-    background-color: #1da851 !important;
+.fab-email:hover {
+    background-color: #0a7a14 !important;
     transform: scale(1.08) !important;
 }
 

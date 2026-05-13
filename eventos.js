@@ -1427,7 +1427,7 @@ async function openEditAsistentes(id, tipoKey, currentManual) {
   
   $('#modal-title').textContent = 'Registrar asistentes manuales · ' + e.titulo;
   $('#modal-body').innerHTML = `
-    <p style="margin-bottom:14px;color:var(--text-soft)">Ingresa la cantidad de personas que asistieron al evento. El total será: registros automáticos + tu entrada.</p>
+    <p style="margin-bottom:14px;color:var(--text-soft)">Ingresa la cantidad de personas que asistieron al evento.</p>
     <div class="form-group">
       <label>Cantidad de asistentes manuales</label>
       <input type="number" id="edit-asistentes-input" min="0" value="${currentManual}" class="form-control" style="padding:10px;border:1px solid var(--border);border-radius:4px;">

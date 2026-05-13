@@ -154,8 +154,9 @@
     <!-- Floating buttons -->
     <button class="fab fab-top" id="fab-top" onclick="window.scrollTo({top:0,behavior:'smooth'})"
         aria-label="Ir arriba"><i class="fa-solid fa-arrow-up"></i></button>
-    <a class="fab fab-wa" href="https://wa.me/573001234567" target="_blank" rel="noopener" aria-label="WhatsApp"><i
-            class="fa-brands fa-whatsapp"></i></a>
+    <a class="fab fab-email" href="mailto:info@uceva.edu.co" aria-label="Enviar correo">
+        <i class="fa-solid fa-envelope"></i>
+    </a>
 
     <!-- Modals -->
     <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
