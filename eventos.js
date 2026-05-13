@@ -108,55 +108,6 @@ function filterEventsByStatus(events, status) {
   return events;
 }
 
-function downloadAttendeesCSV(registros, eventoTitle) {
-  const cleanTitle = eventoTitle.toLowerCase()
-    .replace(/[áéíóúñ]/g, (match) => ({
-      'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n'
-    }[match] || match))
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  const today = new Date();
-  const fechaExportacion = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const filename = `asistentes-${cleanTitle}-${fechaExportacion}.csv`;
-
-  const headers = ['Nombres', 'Apellidos', 'Email', 'Identificación', 'Cargo', 'Institución', 'Fecha de registro'];
-
-  const rows = registros.map(r => [
-    r.nombres,
-    r.apellidos,
-    r.email,
-    `${r.tipo_id} ${r.identificacion}`,
-    r.cargo,
-    r.institucion,
-    new Date(r.fecha_registro).toLocaleString('es-CO')
-  ]);
-
-  let csvContent = `# Exportado el: ${today.toLocaleString('es-CO')}\n`;
-  csvContent += headers.join(',') + '\n';
-  rows.forEach(row => {
-    const escapedRow = row.map(cell => {
-      if (cell === undefined || cell === null) return '';
-      const cellStr = String(cell);
-      if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-        return `"${cellStr.replace(/"/g, '""')}"`;
-      }
-      return cellStr;
-    }).join(',');
-    csvContent += escapedRow + '\n';
-  });
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 function clearFieldErrors(form) {
   form.querySelectorAll('.field-error').forEach(el => el.remove());
   form.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
@@ -734,7 +685,7 @@ async function openEventDetail(id, tipoKey) {
               <div style="position:relative; display:inline-block;">
                 <button id="report-dropdown-btn" class="btn btn-sm" style="background:#2d883b; color:#fff;"><i class="fa-solid fa-file-export"></i> Generar informe <i class="fa-solid fa-caret-down"></i></button>
                 <div id="report-dropdown" class="dropdown" style="display:none; position:absolute; right:0; top:100%; min-width:160px; z-index:400; background:#fff; box-shadow:var(--shadow); border-radius:6px;">
-                  <a href="#" id="export-excel" style="display:block; padding:10px 14px; color:var(--text);"><i class="fa-solid fa-file-excel"></i> Excel (CSV)</a>
+                  <a href="#" id="export-excel" style="display:block; padding:10px 14px; color:var(--text);"><i class="fa-solid fa-file-excel"></i> Excel </a>
                   <a href="#" id="export-pdf" style="display:block; padding:10px 14px; color:var(--text);"><i class="fa-solid fa-file-pdf"></i> PDF</a>
                 </div>
               </div>
@@ -770,7 +721,7 @@ async function openEventDetail(id, tipoKey) {
       document.getElementById('export-excel').addEventListener('click', (ev) => {
         ev.preventDefault();
         reportDropdown.style.display = 'none';
-        downloadFullReportCSV(eventoDatos, originalRegistros);
+        downloadFullReportExcel(eventoDatos, originalRegistros);
       });
 
       document.getElementById('export-pdf').addEventListener('click', (ev) => {
@@ -795,42 +746,116 @@ async function openEventDetail(id, tipoKey) {
   showModal();
 }
 
-function downloadFullReportCSV(evento, registros) {
+function downloadFullReportExcel(evento, registros) {
   const totalAsistentes = registros.length + (evento.asistentes_manuales || 0);
-  let csvContent = '';
+  const wb = XLSX.utils.book_new();
 
-  // Metadatos del evento
-  csvContent += `"Título:","${evento.titulo}"\n`;
-  csvContent += `"Fecha:","${fmtDate(evento.fechaInicio)}"${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}\n`;
-  csvContent += `"Tipo de evento:","${evento.tipoEvento}"\n`;
-  csvContent += `"Clasificación:","${evento.clasificacion}"\n`;
-  csvContent += `"Capacidad:","${evento.capacidad}"\n`;
-  csvContent += `"Total asistentes:","${totalAsistentes}"\n\n`;
+  // ======= HOJA 1: Información del evento =======
+  const infoData = [
+    ['INFORME DE EVENTO - IGSCLAC'],
+    [''],
+    ['DATOS GENERALES'],
+    ['Título', evento.titulo],
+    ['Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`],
+    ['Horario', `${formatTime(evento.horaInicio)} - ${formatTime(evento.horaFin)}`],
+    ['Duración', `${calcDays(evento.fechaInicio, evento.fechaFin)} día(s)`],
+    ['Tipo de evento', evento.tipoEvento],
+    ['Clasificación', evento.clasificacion],
+  ];
 
-  // Tabla de asistentes
-  const headers = ['Nombres', 'Apellidos', 'Email', 'Identificación', 'Cargo', 'Institución', 'Fecha de registro'];
-  csvContent += headers.join(',') + '\n';
-
-  if (registros.length > 0) {
-    registros.forEach(r => {
-      csvContent += [
-        r.nombres,
-        r.apellidos,
-        r.email,
-        `${r.tipo_id} ${r.identificacion}`,
-        r.cargo,
-        r.institucion,
-        new Date(r.fecha_registro).toLocaleString('es-CO')
-      ].map(cell => `"${cell}"`).join(',') + '\n';
-    });
-  } else {
-    csvContent += 'Sin asistentes registrados\n';
+  if (evento.ejeTematico) {
+    infoData.push(['Eje temático', evento.ejeTematico]);
   }
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  infoData.push(
+    ['Lugar', evento.lugar],
+    ['Dirección', evento.direccion || ''],
+    ['Comité organizador', evento.comite],
+    ['Capacidad', evento.capacidad],
+    ['Registros reales', registros.length],
+  );
+
+  if (evento.asistentes_manuales) {
+    infoData.push(['Asistentes manuales', evento.asistentes_manuales]);
+  }
+
+  infoData.push(
+    ['Total asistentes', totalAsistentes],
+    ['Registro habilitado', evento.registroHabilitado ? 'Sí' : 'No'],
+  );
+
+  if (evento.enlace) {
+    infoData.push(['Enlace', evento.enlace]);
+  }
+
+  // Descripción con ajuste de texto automático
+  const descripcion = evento.descripcion || '';
+  infoData.push(['Descripción', descripcion]);
+
+  // Crear hoja de información
+  const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+
+  // Ajustar anchos de columna
+  wsInfo['!cols'] = [
+    { wch: 25 },  // columna A (etiquetas)
+    { wch: 60 }   // columna B (valores)
+  ];
+
+  // Aplicar wrapText a la celda de descripción (fila dinámica)
+  const descRow = infoData.findIndex(row => row[0] === 'Descripción') + 1; // +1 porque AOA empieza en 1
+  if (descRow > 0) {
+    const descCell = XLSX.utils.encode_cell({ r: descRow - 1, c: 1 }); // fila en base 0
+    if (wsInfo[descCell]) {
+      wsInfo[descCell].s = {
+        alignment: { wrapText: true, vertical: 'top' }
+      };
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, wsInfo, 'Información del Evento');
+
+  // ======= HOJA 2: Asistentes registrados =======
+  const headers = [
+    'Nombres', 'Apellidos', 'Email',
+    'Tipo ID', 'Identificación', 'Cargo',
+    'Institución', 'Fecha de registro'
+  ];
+  const rows = registros.length > 0
+    ? registros.map(r => [
+      r.nombres,
+      r.apellidos,
+      r.email,
+      r.tipo_id,
+      r.identificacion,
+      r.cargo,
+      r.institucion,
+      new Date(r.fecha_registro).toLocaleString('es-CO')
+    ])
+    : [['Sin asistentes registrados']];
+
+  const asistData = [headers, ...rows];
+  const wsAsist = XLSX.utils.aoa_to_sheet(asistData);
+
+  // Ancho de columnas para asistentes
+  wsAsist['!cols'] = [
+    { wch: 18 }, // Nombres
+    { wch: 18 }, // Apellidos
+    { wch: 30 }, // Email
+    { wch: 10 }, // Tipo ID
+    { wch: 18 }, // Identificación
+    { wch: 20 }, // Cargo
+    { wch: 30 }, // Institución
+    { wch: 22 }  // Fecha de registro
+  ];
+
+  XLSX.utils.book_append_sheet(wb, wsAsist, 'Asistentes');
+
+  // Generar archivo .xlsx
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.csv`;
+  link.download = `informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.xlsx`;
   link.click();
   URL.revokeObjectURL(link.href);
   toast('Informe Excel descargado');
@@ -838,57 +863,145 @@ function downloadFullReportCSV(evento, registros) {
 
 async function downloadFullReportPDF(evento, registros) {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  let y = 20;
 
-  // Título
+  // --- Cabecera institucional ---
+  doc.setFillColor(0, 156, 26); // var(--primary)
+  doc.rect(0, 0, pageWidth, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.text('IGSCLAC EVENTOS', margin, 15);
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'normal');
+  doc.text('Informe de evento', margin, 22);
+
+  // --- Título del evento ---
+  y = 38;
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(18);
-  doc.text(evento.titulo, 14, 22);
-  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  const titleLines = doc.splitTextToSize(evento.titulo, pageWidth - margin * 2);
+  doc.text(titleLines, margin, y);
+  y += titleLines.length * 8 + 4;
 
-  let y = 35;
-  const addLine = (label, value) => {
-    doc.text(`${label}: ${value}`, 14, y);
-    y += 7;
+  // --- Línea separadora ---
+  doc.setDrawColor(0, 156, 26);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 6;
+
+  // --- Sección de metadatos ---
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  const addMeta = (label, value) => {
+    doc.setFont(undefined, 'bold');
+    doc.text(`${label}:`, margin, y);
+    doc.setFont(undefined, 'normal');
+    doc.text(value || '', margin + 30, y);
+    y += 5.5;
   };
 
   const totalAsistentes = registros.length + (evento.asistentes_manuales || 0);
 
-  addLine('Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`);
-  addLine('Tipo', evento.tipoEvento);
-  addLine('Clasificación', evento.clasificacion);
-  addLine('Capacidad', evento.capacidad.toString());
-  addLine('Total asistentes', totalAsistentes.toString());
+  addMeta('Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`);
+  addMeta('Horario', `${formatTime(evento.horaInicio)} - ${formatTime(evento.horaFin)}`);
+  addMeta('Duración', `${calcDays(evento.fechaInicio, evento.fechaFin)} día(s)`);
+  addMeta('Tipo de evento', evento.tipoEvento);
+  addMeta('Clasificación', evento.clasificacion);
+  if (evento.ejeTematico) addMeta('Eje temático', evento.ejeTematico);
+  addMeta('Lugar', evento.lugar);
+  addMeta('Dirección', evento.direccion || '-');
+  addMeta('Comité organizador', evento.comite);
+  addMeta('Capacidad', evento.capacidad.toString());
+  addMeta('Registros reales', registros.length.toString());
+  if (evento.asistentes_manuales) addMeta('Asistentes manuales', evento.asistentes_manuales.toString());
+  addMeta('Total asistentes', totalAsistentes.toString());
+  addMeta('Registro habilitado', evento.registroHabilitado ? 'Sí' : 'No');
+  if (evento.enlace) addMeta('Enlace', evento.enlace);
 
+  y += 3;
+
+  // --- Descripción ---
+  doc.setFont(undefined, 'bold');
+  doc.text('Descripción:', margin, y);
   y += 5;
+  doc.setFont(undefined, 'normal');
+  const descLines = doc.splitTextToSize(evento.descripcion || '', pageWidth - margin * 2);
+  doc.text(descLines, margin, y);
+  y += descLines.length * 5 + 6;
 
-  // Tabla de asistentes
+  // --- Lista de asistentes ---
+  doc.setFillColor(0, 156, 26);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin, y, pageWidth - margin * 2, 8, 'F');
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.text('ASISTENTES REGISTRADOS', margin + 2, y + 5.5);
+  doc.setTextColor(0, 0, 0);
+  y += 10;
+
   if (registros.length > 0) {
-    doc.text('Lista de asistentes:', 14, y);
-    y += 6;
     // Cabecera de tabla
+    const colWidths = [35, 35, 35, 30, 25, 30]; // nombres, apellidos, email, ident, cargo, institucion
+    const startX = margin;
+    doc.setFontSize(8);
     doc.setFillColor(0, 156, 26);
     doc.setTextColor(255, 255, 255);
-    doc.rect(14, y, 180, 7, 'F');
-    doc.text('Nombre', 16, y + 5);
-    doc.text('Email', 70, y + 5);
-    doc.text('Identificación', 120, y + 5);
-    doc.text('Institución', 155, y + 5);
-    doc.setTextColor(0, 0, 0);
+    const headers = ['Nombres', 'Apellidos', 'Email', 'Identificación', 'Cargo', 'Institución'];
+    let xPos = startX;
+    headers.forEach((h, i) => {
+      doc.rect(xPos, y, colWidths[i], 6, 'F');
+      doc.text(h, xPos + 1, y + 4);
+      xPos += colWidths[i];
+    });
     y += 7;
+    doc.setTextColor(0, 0, 0);
 
     registros.forEach((r, idx) => {
-      if (y > 270) { // Salto de página
+      if (y > 270) {
         doc.addPage();
         y = 20;
+        // Repetir cabecera en nueva página
+        doc.setFillColor(0, 156, 26);
+        doc.setTextColor(255, 255, 255);
+        xPos = margin;
+        headers.forEach((h, i) => {
+          doc.rect(xPos, y, colWidths[i], 6, 'F');
+          doc.text(h, xPos + 1, y + 4);
+          xPos += colWidths[i];
+        });
+        y += 7;
+        doc.setTextColor(0, 0, 0);
       }
-      doc.text(`${r.nombres} ${r.apellidos}`, 16, y + 5);
-      doc.text(r.email, 70, y + 5);
-      doc.text(`${r.tipo_id} ${r.identificacion}`, 120, y + 5);
-      doc.text(r.institucion, 155, y + 5);
-      y += 7;
+      xPos = startX;
+      const rowData = [
+        r.nombres, r.apellidos, r.email,
+        `${r.tipo_id} ${r.identificacion}`, r.cargo, r.institucion
+      ];
+      rowData.forEach((cell, i) => {
+        const text = doc.splitTextToSize(cell || '', colWidths[i] - 2);
+        doc.text(text, xPos + 1, y + 4);
+        xPos += colWidths[i];
+      });
+      y += 6;
     });
   } else {
-    doc.text('No se registraron asistentes en este evento.', 14, y);
+    doc.setFontSize(10);
+    doc.text('No se registraron asistentes en este evento.', margin, y);
+  }
+
+  // --- Pie de página ---
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Informe generado el ${new Date().toLocaleString('es-CO')}`, margin, 285);
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin - 20, 285);
   }
 
   doc.save(`informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);

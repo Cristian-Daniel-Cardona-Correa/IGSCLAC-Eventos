@@ -28,6 +28,14 @@ function igsclac_assets() {
         true
     );
 
+    wp_enqueue_script(
+        'sheetjs',
+        'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js',
+        [],
+        null,
+        true
+    );
+
     // Localizar variables para el script
     wp_localize_script('eventos-js', 'wpApiSettings', array(
         'root'  => esc_url_raw(rest_url()),
