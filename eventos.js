@@ -66,6 +66,14 @@ function formatTime(t) {
   return t.substring(0, 5);
 }
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function fmtDatePDF(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return `${parseInt(day, 10)} de ${MESES[parseInt(m, 10) - 1]} de ${y}`;
+}
+
 function calcDays(fechaInicio, fechaFin) {
   if (!fechaInicio || !fechaFin) return 1;
   const start = new Date(fechaInicio + 'T00:00:00');
@@ -756,7 +764,7 @@ function downloadFullReportExcel(evento, registros) {
     [''],
     ['DATOS GENERALES'],
     ['Título', evento.titulo],
-    ['Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`],
+    ['Fecha', `${fmtDatePDF(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' - ' + fmtDatePDF(evento.fechaFin) : ''}`],
     ['Horario', `${formatTime(evento.horaInicio)} - ${formatTime(evento.horaFin)}`],
     ['Duración', `${calcDays(evento.fechaInicio, evento.fechaFin)} día(s)`],
     ['Tipo de evento', evento.tipoEvento],
@@ -865,143 +873,221 @@ async function downloadFullReportPDF(evento, registros) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 14;
-  let y = 20;
+  const margin = 16;
+  let y = 24;
 
-  // --- Cabecera institucional ---
-  doc.setFillColor(0, 156, 26); // var(--primary)
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  // ====== CABECERA INSTITUCIONAL ======
+  doc.setFillColor(0, 156, 26); // Color verde corporativo
+  doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setFont(undefined, 'bold');
-  doc.text('IGSCLAC EVENTOS', margin, 15);
+  doc.text('IGSCLAC EVENTOS', margin, 16);
   doc.setFontSize(9);
   doc.setFont(undefined, 'normal');
-  doc.text('Informe de evento', margin, 22);
+  doc.text('Informe de evento', margin, 24);
 
-  // --- Título del evento ---
-  y = 38;
+  // ====== TÍTULO DEL EVENTO ======
+  y = 44;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(18);
   doc.setFont(undefined, 'bold');
   const titleLines = doc.splitTextToSize(evento.titulo, pageWidth - margin * 2);
   doc.text(titleLines, margin, y);
-  y += titleLines.length * 8 + 4;
+  y += titleLines.length * 8 + 8;
 
-  // --- Línea separadora ---
+  // Línea decorativa
   doc.setDrawColor(0, 156, 26);
-  doc.setLineWidth(0.5);
+  doc.setLineWidth(0.8);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 6;
+  y += 8;
 
-  // --- Sección de metadatos ---
+  // ====== TABLA DE METADATOS (usa doc.rect para simular tabla) ======
   doc.setFontSize(10);
-  doc.setFont(undefined, 'normal');
-  const addMeta = (label, value) => {
-    doc.setFont(undefined, 'bold');
-    doc.text(`${label}:`, margin, y);
-    doc.setFont(undefined, 'normal');
-    doc.text(value || '', margin + 30, y);
-    y += 5.5;
-  };
+  doc.setTextColor(0, 0, 0);
 
-  const totalAsistentes = registros.length + (evento.asistentes_manuales || 0);
+  // Preparar filas de metadatos
+  const metaRows = [
+    ['Fecha', `${fmtDatePDF(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' - ' + fmtDatePDF(evento.fechaFin) : ''}`],
+    ['Horario', `${formatTime(evento.horaInicio)} - ${formatTime(evento.horaFin)}`],
+    ['Duración', `${calcDays(evento.fechaInicio, evento.fechaFin)} día(s)`],
+    ['Tipo de evento', evento.tipoEvento],
+    ['Clasificación', evento.clasificacion],
+  ];
+  if (evento.ejeTematico) {
+    metaRows.push(['Eje temático', evento.ejeTematico]);
+  }
+  metaRows.push(
+    ['Lugar', evento.lugar],
+    ['Dirección', evento.direccion || '-'],
+    ['Comité organizador', evento.comite],
+    ['Capacidad', String(evento.capacidad)],
+    ['Registros reales', String(registros.length)],
+  );
+  if (evento.asistentes_manuales) {
+    metaRows.push(['Asistentes manuales', String(evento.asistentes_manuales)]);
+  }
+  metaRows.push(['Total asistentes', String(registros.length + (evento.asistentes_manuales || 0))]);
+  metaRows.push(['Registro habilitado', evento.registroHabilitado ? 'Sí' : 'No']);
+  if (evento.enlace) {
+    metaRows.push(['Enlace', evento.enlace]);
+  }
 
-  addMeta('Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`);
-  addMeta('Horario', `${formatTime(evento.horaInicio)} - ${formatTime(evento.horaFin)}`);
-  addMeta('Duración', `${calcDays(evento.fechaInicio, evento.fechaFin)} día(s)`);
-  addMeta('Tipo de evento', evento.tipoEvento);
-  addMeta('Clasificación', evento.clasificacion);
-  if (evento.ejeTematico) addMeta('Eje temático', evento.ejeTematico);
-  addMeta('Lugar', evento.lugar);
-  addMeta('Dirección', evento.direccion || '-');
-  addMeta('Comité organizador', evento.comite);
-  addMeta('Capacidad', evento.capacidad.toString());
-  addMeta('Registros reales', registros.length.toString());
-  if (evento.asistentes_manuales) addMeta('Asistentes manuales', evento.asistentes_manuales.toString());
-  addMeta('Total asistentes', totalAsistentes.toString());
-  addMeta('Registro habilitado', evento.registroHabilitado ? 'Sí' : 'No');
-  if (evento.enlace) addMeta('Enlace', evento.enlace);
+  // Configuración de columnas
+  const col1Width = 45;  // Ancho de la etiqueta
+  const col2Width = pageWidth - margin * 2 - col1Width; // Ancho del valor
+  const rowHeight = 7;
+  const headerColor = [0, 156, 26]; // verde
 
-  y += 3;
-
-  // --- Descripción ---
+  // Dibujar encabezado de la tabla de metadatos
+  doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
+  doc.rect(margin, y, col1Width + col2Width, rowHeight, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
   doc.setFont(undefined, 'bold');
+  doc.text('DATOS DEL EVENTO', margin + 2, y + 5);
+  doc.setTextColor(0, 0, 0);
+  y += rowHeight;
+
+  // Dibujar filas de metadatos
+  metaRows.forEach((row, index) => {
+    // Fondo alterno para legibilidad
+    if (index % 2 === 0) {
+      doc.setFillColor(245, 249, 245); // gris muy claro verdoso
+    } else {
+      doc.setFillColor(255, 255, 255);
+    }
+    doc.rect(margin, y, col1Width + col2Width, rowHeight, 'F');
+
+    // Borde inferior suave
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + rowHeight, margin + col1Width + col2Width, y + rowHeight);
+
+    // Etiqueta en negrita
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.text(row[0], margin + 2, y + 5);
+
+    // Valor en normal
+    doc.setFont(undefined, 'normal');
+    // Si el valor es largo, usar splitTextToSize
+    const valueLines = doc.splitTextToSize(row[1], col2Width - 4);
+    doc.text(valueLines, margin + col1Width + 2, y + 5);
+
+    // Aumentar la altura de la fila si el texto ocupa más de una línea
+    const currentRowHeight = Math.max(rowHeight, (valueLines.length * 4.5) + 2);
+    y += currentRowHeight;
+  });
+
+  y += 8; // espacio después de la tabla
+
+  // ====== DESCRIPCIÓN ======
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(10);
   doc.text('Descripción:', margin, y);
   y += 5;
   doc.setFont(undefined, 'normal');
+  doc.setFontSize(9.5);
   const descLines = doc.splitTextToSize(evento.descripcion || '', pageWidth - margin * 2);
   doc.text(descLines, margin, y);
-  y += descLines.length * 5 + 6;
+  y += descLines.length * 5 + 8;
 
-  // --- Lista de asistentes ---
-  doc.setFillColor(0, 156, 26);
+  // ====== LISTA DE ASISTENTES ======
+  doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
+  doc.rect(margin, y, col1Width + col2Width, rowHeight + 1, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.rect(margin, y, pageWidth - margin * 2, 8, 'F');
   doc.setFontSize(10);
   doc.setFont(undefined, 'bold');
   doc.text('ASISTENTES REGISTRADOS', margin + 2, y + 5.5);
   doc.setTextColor(0, 0, 0);
-  y += 10;
+  y += rowHeight + 3;
 
   if (registros.length > 0) {
-    // Cabecera de tabla
-    const colWidths = [35, 35, 35, 30, 25, 30]; // nombres, apellidos, email, ident, cargo, institucion
-    const startX = margin;
-    doc.setFontSize(8);
-    doc.setFillColor(0, 156, 26);
+    // Configuración de columnas de la tabla de asistentes
+    const asistHeaders = ['Nombre completo', 'Identificación', 'Email', 'Cargo', 'Institución'];
+    const asistColWidths = [45, 30, 45, 30, 30]; // total: 180 (ancho página - 2 * margin = 178 aprox)
+    // Ajustamos para que cuadre exacto
+    const totalAsistWidth = asistColWidths.reduce((a, b) => a + b, 0);
+    const startX = margin + (col1Width + col2Width - totalAsistWidth) / 2; // centrar
+
+    // Cabecera de la tabla
+    doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
+    doc.rect(startX, y, totalAsistWidth, 7, 'F');
     doc.setTextColor(255, 255, 255);
-    const headers = ['Nombres', 'Apellidos', 'Email', 'Identificación', 'Cargo', 'Institución'];
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'bold');
     let xPos = startX;
-    headers.forEach((h, i) => {
-      doc.rect(xPos, y, colWidths[i], 6, 'F');
-      doc.text(h, xPos + 1, y + 4);
-      xPos += colWidths[i];
+    asistHeaders.forEach((h, i) => {
+      doc.text(h, xPos + 1, y + 5);
+      xPos += asistColWidths[i];
     });
     y += 7;
     doc.setTextColor(0, 0, 0);
 
+    // Filas de datos
     registros.forEach((r, idx) => {
-      if (y > 270) {
+      if (y > 265) {
         doc.addPage();
         y = 20;
         // Repetir cabecera en nueva página
-        doc.setFillColor(0, 156, 26);
+        doc.setFillColor(headerColor[0], headerColor[1], headerColor[2]);
+        doc.rect(startX, y, totalAsistWidth, 7, 'F');
         doc.setTextColor(255, 255, 255);
-        xPos = margin;
-        headers.forEach((h, i) => {
-          doc.rect(xPos, y, colWidths[i], 6, 'F');
-          doc.text(h, xPos + 1, y + 4);
-          xPos += colWidths[i];
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        let xPos2 = startX;
+        asistHeaders.forEach((h, i) => {
+          doc.text(h, xPos2 + 1, y + 5);
+          xPos2 += asistColWidths[i];
         });
         y += 7;
         doc.setTextColor(0, 0, 0);
       }
-      xPos = startX;
+
+      // Alternar color de fondo
+      if (idx % 2 === 0) {
+        doc.setFillColor(245, 249, 245);
+      } else {
+        doc.setFillColor(255, 255, 255);
+      }
+      doc.rect(startX, y, totalAsistWidth, 6, 'F');
+
+      doc.setFontSize(7.5);
+      doc.setFont(undefined, 'normal');
+      let xPosRow = startX;
       const rowData = [
-        r.nombres, r.apellidos, r.email,
-        `${r.tipo_id} ${r.identificacion}`, r.cargo, r.institucion
+        `${r.nombres} ${r.apellidos}`,
+        `${r.tipo_id} ${r.identificacion}`,
+        r.email,
+        r.cargo,
+        r.institucion
       ];
       rowData.forEach((cell, i) => {
-        const text = doc.splitTextToSize(cell || '', colWidths[i] - 2);
-        doc.text(text, xPos + 1, y + 4);
-        xPos += colWidths[i];
+        // Ajustar texto al ancho de columna
+        const lines = doc.splitTextToSize(cell || '', asistColWidths[i] - 2);
+        lines.forEach((line, lineIdx) => {
+          doc.text(line, xPosRow + 1, y + 4 + lineIdx * 3.5);
+        });
+        xPosRow += asistColWidths[i];
       });
-      y += 6;
+      y += 7; // altura de fila fija para uniformidad (si alguna fila necesita más altura, podríamos calcularla, pero con 7mm suele ser suficiente)
     });
   } else {
     doc.setFontSize(10);
     doc.text('No se registraron asistentes en este evento.', margin, y);
   }
 
-  // --- Pie de página ---
+  // ====== PIE DE PÁGINA ======
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text(`Informe generado el ${new Date().toLocaleString('es-CO')}`, margin, 285);
-    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin - 20, 285);
+    doc.setFont(undefined, 'italic');
+    doc.text(`Informe generado el ${new Date().toLocaleString('es-CO')}`, margin, 287);
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin - 20, 287);
   }
 
   doc.save(`informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
