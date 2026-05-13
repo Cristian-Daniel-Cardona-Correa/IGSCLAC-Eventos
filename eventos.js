@@ -1215,8 +1215,8 @@ function abrirEditorHeroSlides() {
   if (state.role !== 'admin') { toast('Solo el administrador puede editar el hero', 'error'); return; }
 
   const modal = `
-    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:30px;">
+    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) document.getElementById('hero-editor-modal').remove()">
+      <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
         <style>
           #hero-editor-modal .form-group div[style*="display:flex"] {
             flex-wrap: wrap;
@@ -1226,14 +1226,16 @@ function abrirEditorHeroSlides() {
             margin-top: 4px;
           }
         </style>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-          <h2 style="margin:0;color:var(--primary)">Editar Hero Slider</h2>
-          <button onclick="document.getElementById('hero-editor-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;">&times;</button>
+        <div class="modal-header" style="background:var(--primary);color:#fff;border-radius:8px 8px 0 0;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;color:#fff">Editar Hero Slider</h3>
+          <button onclick="document.getElementById('hero-editor-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#fff;">&times;</button>
         </div>
-        <div id="hero-editor-content"></div>
-        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
-          <button onclick="document.getElementById('hero-editor-modal').remove()" class="btn btn-secondary">Cancelar</button>
-          <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
+        <div style="padding:30px;">
+          <div id="hero-editor-content"></div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="document.getElementById('hero-editor-modal').remove()" class="btn btn-secondary">Cancelar</button>
+            <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
+          </div>
         </div>
       </div>
     </div>
