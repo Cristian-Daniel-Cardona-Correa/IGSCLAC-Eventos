@@ -33,7 +33,7 @@ let state = {
 };
 
 const savedView = localStorage.getItem('igsclac_view');
-if (savedView && ['home', 'academicos', 'investigacion', 'admin', 'contacto'].includes(savedView)) {
+if (savedView && ['home', 'academicos', 'investigacion', 'admin'].includes(savedView)) {
   if (savedView === 'admin' && state.role !== 'admin') {
     state.view = 'home';
   } else {
@@ -447,7 +447,6 @@ async function render() {
     case 'academicos': await renderEventList(c, 'académico'); break;
     case 'investigacion': await renderEventList(c, 'investigación'); break;
     case 'admin': await renderAdmin(c); break;
-    case 'contacto': renderContact(c); break;
     default: await renderHome(c);
   }
   await renderUpcoming();
@@ -2009,22 +2008,6 @@ async function toggleEventVisibility(event, id, tipoKey) {
     toast('Error al cambiar visibilidad: ' + err.message, 'error');
     event.target.checked = !newState; // Revertir el estado del checkbox si hay error
   }
-}
-
-// ---------- CONTACTO  ----------
-function renderContact(c) {
-  setBreadcrumbs([{ view: 'home', label: 'Inicio' }, { view: 'contacto', label: 'Contacto' }]);
-  c.innerHTML = `
-    <div class="section-title"><h2><i class="fa-solid fa-envelope"></i> Contáctanos</h2></div>
-    <div class="widget">
-      <p>¿Tienes preguntas sobre algún evento? Escríbenos:</p>
-      <ul style="list-style:none;margin-top:14px">
-        <li style="padding:6px 0"><i class="fa-solid fa-envelope" style="color:var(--primary);width:24px"></i> eventos@igsclac.com</li>
-        <li style="padding:6px 0"><i class="fa-solid fa-phone" style="color:var(--primary);width:24px"></i> +57 (2) 224 5555</li>
-        <li style="padding:6px 0"><i class="fa-solid fa-location-dot" style="color:var(--primary);width:24px"></i> Unidad Central del Valle del Cauca, Tuluá, Valle del Cauca</li>
-      </ul>
-    </div>
-  `;
 }
 
 // ---------- WIDGET PRÓXIMOS  ----------
