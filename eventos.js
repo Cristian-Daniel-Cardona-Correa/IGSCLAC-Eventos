@@ -1075,6 +1075,7 @@ async function downloadFullReportPDF(evento, registros) {
       y += 7; // altura de fila fija para uniformidad (si alguna fila necesita más altura, podríamos calcularla, pero con 7mm suele ser suficiente)
     });
   } else {
+    y += 5;
     doc.setFontSize(10);
     doc.text('No se registraron asistentes en este evento.', margin, y);
   }
