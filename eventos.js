@@ -336,6 +336,7 @@ async function goPage(context, page) {
 }
 
 let slideIdx = 0;
+let heroInterval;
 function buildHero() {
   const hero = $('#hero');
   hero.querySelectorAll('.slide').forEach(n => n.remove());
@@ -348,13 +349,45 @@ function buildHero() {
   });
   const dots = $('#hero-dots'); dots.innerHTML = '';
   slides.forEach((_, i) => { const s = document.createElement('span'); s.className = i === 0 ? 'active' : ''; s.onclick = () => goSlide(i); dots.appendChild(s); });
+
+  // --- Soporte de swipe para móviles ---
+  const heroEl = $('#hero');
+  if (heroEl) {
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    heroEl.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    heroEl.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      const diff = touchStartX - touchEndX;
+      const threshold = 40; // px mínimos para considerar swipe
+
+      if (Math.abs(diff) > threshold) {
+        if (diff > 0) {
+          goSlide((slideIdx + 1) % slides.length);
+        } else {
+          goSlide((slideIdx - 1 + slides.length) % slides.length);
+        }
+      }
+    }, { passive: true });
+  }
 }
 function goSlide(i) {
   slideIdx = i;
   document.querySelectorAll('.slide').forEach((n, k) => n.classList.toggle('active', k === i));
   document.querySelectorAll('#hero-dots span').forEach((n, k) => n.classList.toggle('active', k === i));
+  resetHeroInterval();
 }
-setInterval(() => goSlide((slideIdx + 1) % slides.length), 5500);
+
+resetHeroInterval();
+
+function resetHeroInterval() {
+  if (heroInterval) clearInterval(heroInterval);
+  heroInterval = setInterval(() => goSlide((slideIdx + 1) % slides.length), 5500);
+}
 
 // ---------- ROLES ----------
 function toggleRole() {
