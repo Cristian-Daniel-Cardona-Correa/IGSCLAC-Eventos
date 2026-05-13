@@ -552,7 +552,8 @@ function emptyHtml(msg) { return `<div class="empty"><i class="fa-regular fa-cal
 async function cardHtml(e) {
   const isAcad = e.tipo === 'académico';
   const regs = await cargarRegistros(e.id);
-  const lleno = regs.length >= e.capacidad;
+  const totalAsistentes = regs.length + (e.asistentes_manuales || 0);
+  const lleno = totalAsistentes >= e.capacidad;
   return `
     <article class="event-card">
       <div class="flyer" style="background-image:url('${esc(e.imagen || 'https://placehold.co/600x400/009c1a/fff?text=Evento')}')">
@@ -567,7 +568,7 @@ async function cardHtml(e) {
         <p class="desc">${esc((e.descripcion || '').slice(0, 120))}${(e.descripcion || '').length > 120 ? '…' : ''}</p>
         <div class="meta">
           <span><i class="fa-solid fa-location-dot"></i> ${esc(e.lugar)}</span>
-          <span><i class="fa-solid fa-users"></i> ${regs.length}/${e.capacidad}</span>
+          <span><i class="fa-solid fa-users"></i> ${totalAsistentes}/${e.capacidad}</span>
         </div>
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="openEventDetail('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-eye"></i> Ver más</button>
