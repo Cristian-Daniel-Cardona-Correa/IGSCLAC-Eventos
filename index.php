@@ -44,11 +44,7 @@
 					IGSCLAC <span
                     style="color:var(--text);font-weight:700">Eventos</span>
             </a>
-            <div class="role-switch" aria-live="polite">
-                <i class="fa-solid fa-user-shield"></i>
-                Modo: <span class="role-badge" id="role-label">Usuario General</span>
-                <button onclick="toggleRole()" id="role-btn">Cambiar a Admin</button>
-            </div>
+            <div id="role-switch-container"></div>
         </div>
     </header>
 

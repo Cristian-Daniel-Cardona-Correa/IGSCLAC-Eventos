@@ -14,8 +14,10 @@ if (typeof wpApiSettings === 'undefined') {
 
 const PER_PAGE = 6;
 
+const userLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
+
 let state = {
-  role: localStorage.getItem('igsclac_role') || 'user',
+  role: userLoggedIn ? (localStorage.getItem('igsclac_role') || 'admin') : 'user',
   view: 'home',
   search: '',
   pageHome: 1,
@@ -295,24 +297,24 @@ async function goPage(context, page) {
   if (context === 'inv') state.pageInv = page;
   if (context === 'admin-acad') state.pageAdminAcad = page;
   if (context === 'admin-inv') state.pageAdminInv = page;
-  
+
   // Para admin, actualizar solo la tabla correspondiente sin hacer render() completo
   if (context === 'admin-acad' || context === 'admin-inv') {
-    const filtered = context === 'admin-acad' 
+    const filtered = context === 'admin-acad'
       ? (state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad))
       : (state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv));
-    
+
     const sortOrder = context === 'admin-acad' ? currentAcademicSort : currentResearchSort;
     const sorted = sortEvents(filtered, sortOrder);
     const tipoKey = context === 'admin-acad' ? 'acad' : 'inv';
-    
+
     const totalPages = Math.ceil(sorted.length / PER_PAGE);
     const start = (page - 1) * PER_PAGE;
     const paginated = sorted.slice(start, start + PER_PAGE);
-    
+
     const newHtml = await adminTable(paginated, tipoKey);
     const paginationHtmlString = paginationHtml(page, totalPages, context);
-    
+
     const containerId = context === 'admin-acad' ? 'academic-table-container' : 'research-table-container';
     const container = document.getElementById(containerId);
     const paginationEl = document.getElementById('pagination-' + context);
@@ -356,6 +358,12 @@ setInterval(() => goSlide((slideIdx + 1) % slides.length), 5500);
 
 // ---------- ROLES ----------
 function toggleRole() {
+  const isLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
+  if (!isLoggedIn) {
+    toast('Debes iniciar sesión para acceder al modo administrador', 'error');
+    return;
+  }
+
   state.role = state.role === 'admin' ? 'user' : 'admin';
   localStorage.setItem('igsclac_role', state.role);
   applyRole();
@@ -366,9 +374,35 @@ function toggleRole() {
   }
   toast('Modo cambiado a: ' + (state.role === 'admin' ? 'Administrador' : 'Usuario General'));
 }
+
 function applyRole() {
-  $('#role-label').textContent = state.role === 'admin' ? 'Administrador' : 'Usuario General';
-  $('#role-btn').textContent = state.role === 'admin' ? 'Cambiar a Usuario' : 'Cambiar a Admin';
+  const isLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
+  const container = $('#role-switch-container');
+
+  if (isLoggedIn) {
+    // Crear el role-switch solo si no existe ya
+    if (container && !container.querySelector('.role-switch')) {
+      const roleSwitch = document.createElement('div');
+      roleSwitch.className = 'role-switch';
+      roleSwitch.setAttribute('aria-live', 'polite');
+      roleSwitch.innerHTML = `
+        <i class="fa-solid fa-user-shield"></i>
+        Modo: <span class="role-badge" id="role-label">Usuario General</span>
+        <button onclick="toggleRole()" id="role-btn">Cambiar a Admin</button>
+      `;
+      container.appendChild(roleSwitch);
+    }
+    // Actualizar etiquetas según el rol actual
+    $('#role-label').textContent = state.role === 'admin' ? 'Administrador' : 'Usuario General';
+    $('#role-btn').textContent = state.role === 'admin' ? 'Cambiar a Usuario' : 'Cambiar a Admin';
+  } else {
+    // Usuario no autenticado: limpiar el contenedor y forzar rol 'user'
+    if (container) container.innerHTML = '';
+    state.role = 'user';
+    localStorage.setItem('igsclac_role', 'user');
+  }
+
+  // Mostrar u ocultar enlace "Panel Admin" en el menú
   $('#nav-admin').style.display = state.role === 'admin' ? 'block' : 'none';
 }
 
@@ -1200,26 +1234,26 @@ async function renderAdmin(c) {
   // Procesar eventos académicos con paginación
   let sortedAcad = sortEvents(acad, currentAcademicSort);
   sortedAcad = state.filterAdminAcad === 'all' ? sortedAcad : filterEventsByStatus(sortedAcad, state.filterAdminAcad);
-  
+
   const totalAcad = sortedAcad.length;
   const totalPagesAcad = Math.ceil(totalAcad / PER_PAGE);
   let currentPageAcad = Math.min(state.pageAdminAcad, totalPagesAcad || 1);
   if (currentPageAcad < 1) currentPageAcad = 1;
   state.pageAdminAcad = currentPageAcad;
-  
+
   const startAcad = (currentPageAcad - 1) * PER_PAGE;
   const paginatedAcad = sortedAcad.slice(startAcad, startAcad + PER_PAGE);
 
   // Procesar eventos de investigación con paginación
   let sortedInv = sortEvents(inv, currentResearchSort);
   sortedInv = state.filterAdminInv === 'all' ? sortedInv : filterEventsByStatus(sortedInv, state.filterAdminInv);
-  
+
   const totalInv = sortedInv.length;
   const totalPagesInv = Math.ceil(totalInv / PER_PAGE);
   let currentPageInv = Math.min(state.pageAdminInv, totalPagesInv || 1);
   if (currentPageInv < 1) currentPageInv = 1;
   state.pageAdminInv = currentPageInv;
-  
+
   const startInv = (currentPageInv - 1) * PER_PAGE;
   const paginatedInv = sortedInv.slice(startInv, startInv + PER_PAGE);
 
@@ -1317,11 +1351,11 @@ async function renderAdmin(c) {
     state.pageAdminAcad = 1; // Resetear a página 1 al cambiar ordenamiento
     const filtered = state.filterAdminAcad === 'all' ? cachedAcademicEvents : filterEventsByStatus(cachedAcademicEvents, state.filterAdminAcad);
     const sorted = sortEvents(filtered, currentAcademicSort);
-    
+
     const totalPages = Math.ceil(sorted.length / PER_PAGE);
     const start = 0;
     const paginated = sorted.slice(start, start + PER_PAGE);
-    
+
     const newHtml = await adminTable(paginated, 'acad');
     const paginationHtmlString = paginationHtml(1, totalPages, 'admin-acad');
     const container = document.getElementById('academic-table-container');
@@ -1341,11 +1375,11 @@ async function renderAdmin(c) {
     state.pageAdminInv = 1; // Resetear a página 1 al cambiar ordenamiento
     const filtered = state.filterAdminInv === 'all' ? cachedResearchEvents : filterEventsByStatus(cachedResearchEvents, state.filterAdminInv);
     const sorted = sortEvents(filtered, currentResearchSort);
-    
+
     const totalPages = Math.ceil(sorted.length / PER_PAGE);
     const start = 0;
     const paginated = sorted.slice(start, start + PER_PAGE);
-    
+
     const newHtml = await adminTable(paginated, 'inv');
     const paginationHtmlString = paginationHtml(1, totalPages, 'admin-inv');
     const container = document.getElementById('research-table-container');
@@ -1385,11 +1419,11 @@ async function adminTable(list, tipoKey) {
     const isRegDisabled = !e.registroHabilitado;
     const totalAsistentes = rCount + (e.asistentes_manuales || 0);
     const canEditManual = isPast && isRegDisabled;
-    
-    const registroCell = canEditManual 
+
+    const registroCell = canEditManual
       ? `<strong>${totalAsistentes}</strong> <button class="btn btn-sm btn-secondary" style="padding:2px 6px;margin-left:6px;" onclick="openEditAsistentes('${e.id}','${tipoKey}',${e.asistentes_manuales || 0})"><i class="fa-solid fa-pen"></i></button>`
       : `<strong>${totalAsistentes}</strong>`;
-    
+
     rows += `
       <tr>
         <td style="text-align:center">
@@ -1425,7 +1459,7 @@ async function openEditAsistentes(id, tipoKey, currentManual) {
   const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
   const e = eventos.find(x => x.id === id);
   if (!e) { toast('Evento no encontrado', 'error'); return; }
-  
+
   $('#modal-title').textContent = 'Registrar asistentes manuales · ' + e.titulo;
   $('#modal-body').innerHTML = `
     <p style="margin-bottom:14px;color:var(--text-soft)">Ingresa la cantidad de personas que asistieron al evento.</p>
@@ -1435,71 +1469,71 @@ async function openEditAsistentes(id, tipoKey, currentManual) {
       <small style="color:var(--text-soft);margin-top:8px;display:block;">No puede exceder la capacidad del evento (${e.capacidad})</small>
     </div>
   `;
-  
+
   $('#modal-footer').innerHTML = `
     <button class="btn" onclick="saveAsistentes('${id}','${tipoKey}')"><i class="fa-solid fa-check"></i> Guardar</button>
     <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
   `;
-  
+
   showModal();
 }
 
 async function saveAsistentes(id, tipoKey) {
   const input = document.getElementById('edit-asistentes-input');
   const inputValue = input.value.trim();
-  
+
   // Validación: campo vacío
   if (!inputValue) {
     toast('Por favor ingresa una cantidad', 'error');
     input.focus();
     return;
   }
-  
+
   const cantidad = parseInt(inputValue, 10);
-  
+
   // Validación: NaN
   if (isNaN(cantidad)) {
     toast('La cantidad debe ser un número válido', 'error');
     input.focus();
     return;
   }
-  
+
   // Obtener evento para validar capacidad
   const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
   const evento = eventos.find(e => e.id === id);
-  
+
   // Validación: negativo
   if (cantidad < 0) {
     toast('La cantidad no puede ser negativa', 'error');
     input.focus();
     return;
   }
-  
+
   // Validación: no excede capacidad
   if (evento && cantidad > evento.capacidad) {
     toast(`La cantidad no puede ser mayor a ${evento.capacidad} (capacidad del evento)`, 'error');
     input.focus();
     return;
   }
-  
+
   try {
-    const response = await fetchAPI(`/eventos/${id}/asistentes-manuales`, { 
-      method: 'POST', 
-      body: { cantidad } 
+    const response = await fetchAPI(`/eventos/${id}/asistentes-manuales`, {
+      method: 'POST',
+      body: { cantidad }
     });
-    
+
     if (!response.success) {
       throw new Error('Error al guardar los datos');
     }
-    
+
     // Actualizar caché local
     if (evento) {
       evento.asistentes_manuales = cantidad;
     }
-    
+
     toast('✓ Asistentes guardados correctamente');
     closeModal();
-    
+
     // Refrescar solo la tabla correspondiente
     await actualizarTablaAdmin(tipoKey);
   } catch (err) {
@@ -1517,7 +1551,7 @@ async function actualizarTablaAdmin(tipoKey) {
       const currentPage = Math.min(state.pageAdminAcad, totalPages || 1);
       const start = (currentPage - 1) * PER_PAGE;
       const paginated = sorted.slice(start, start + PER_PAGE);
-      
+
       const newHtml = await adminTable(paginated, 'acad');
       const container = document.getElementById('academic-table-container');
       if (container) {
@@ -1530,7 +1564,7 @@ async function actualizarTablaAdmin(tipoKey) {
       const currentPage = Math.min(state.pageAdminInv, totalPages || 1);
       const start = (currentPage - 1) * PER_PAGE;
       const paginated = sorted.slice(start, start + PER_PAGE);
-      
+
       const newHtml = await adminTable(paginated, 'inv');
       const container = document.getElementById('research-table-container');
       if (container) {
@@ -1576,12 +1610,12 @@ async function toggleEventVisibility(event, id, tipoKey) {
       let sorted = sortEvents(acad, currentAcademicSort);
       // Aplicar filtro de estado actual
       sorted = state.filterAdminAcad === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminAcad);
-      
+
       const totalPages = Math.ceil(sorted.length / PER_PAGE);
       const currentPage = Math.min(state.pageAdminAcad, totalPages || 1);
       const start = (currentPage - 1) * PER_PAGE;
       const paginated = sorted.slice(start, start + PER_PAGE);
-      
+
       const newHtml = await adminTable(paginated, 'acad');
       const paginationHtmlString = paginationHtml(currentPage, totalPages, 'admin-acad');
       const container = document.getElementById('academic-table-container');
@@ -1598,12 +1632,12 @@ async function toggleEventVisibility(event, id, tipoKey) {
       let sorted = sortEvents(inv, currentResearchSort);
       // Aplicar filtro de estado actual
       sorted = state.filterAdminInv === 'all' ? sorted : filterEventsByStatus(sorted, state.filterAdminInv);
-      
+
       const totalPages = Math.ceil(sorted.length / PER_PAGE);
       const currentPage = Math.min(state.pageAdminInv, totalPages || 1);
       const start = (currentPage - 1) * PER_PAGE;
       const paginated = sorted.slice(start, start + PER_PAGE);
-      
+
       const newHtml = await adminTable(paginated, 'inv');
       const paginationHtmlString = paginationHtml(currentPage, totalPages, 'admin-inv');
       const container = document.getElementById('research-table-container');
