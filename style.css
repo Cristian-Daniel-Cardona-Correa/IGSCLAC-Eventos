@@ -672,6 +672,14 @@ textarea {
     opacity: .5
 }
 
+#report-dropdown a {
+    transition: background 0.2s;
+}
+#report-dropdown a:hover {
+    background: #f5f9f5;
+    color: var(--primary);
+}
+
 /* ===================== PAGINATION ===================== */
 .pagination {
     display: flex;

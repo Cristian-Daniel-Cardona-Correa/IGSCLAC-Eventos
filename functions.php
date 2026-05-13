@@ -20,6 +20,14 @@ function igsclac_assets() {
         true
     );
 
+    wp_enqueue_script(
+        'jspdf',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        [],
+        null,
+        true
+    );
+
     // Localizar variables para el script
     wp_localize_script('eventos-js', 'wpApiSettings', array(
         'root'  => esc_url_raw(rest_url()),

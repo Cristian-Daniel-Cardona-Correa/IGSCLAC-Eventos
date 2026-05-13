@@ -723,12 +723,22 @@ async function openEventDetail(id, tipoKey) {
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
             <h4 style="color:var(--primary); margin:0"><i class="fa-solid fa-clipboard-list"></i> Asistentes registrados (${totalAsistentes})</h4>
             <div style="display:flex; gap:8px;">
+              ${originalRegistros.length > 0 ? `
               <select id="sort-attendees" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary); width:auto;">
                 <option value="default">Orden por defecto</option>
                 <option value="lastname_asc">Apellido (A → Z)</option>
                 <option value="lastname_desc">Apellido (Z → A)</option>
               </select>
-              <button id="export-csv-btn" class="btn btn-sm" style="background:#2d883b; color:#fff;"><i class="fa-solid fa-download"></i> Exportar CSV</button>
+              ` : ''}
+              ${isEventPast(e.fechaFin || e.fechaInicio) ? `
+              <div style="position:relative; display:inline-block;">
+                <button id="report-dropdown-btn" class="btn btn-sm" style="background:#2d883b; color:#fff;"><i class="fa-solid fa-file-export"></i> Generar informe <i class="fa-solid fa-caret-down"></i></button>
+                <div id="report-dropdown" class="dropdown" style="display:none; position:absolute; right:0; top:100%; min-width:160px; z-index:400; background:#fff; box-shadow:var(--shadow); border-radius:6px;">
+                  <a href="#" id="export-excel" style="display:block; padding:10px 14px; color:var(--text);"><i class="fa-solid fa-file-excel"></i> Excel (CSV)</a>
+                  <a href="#" id="export-pdf" style="display:block; padding:10px 14px; color:var(--text);"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+                </div>
+              </div>
+        ` : ''}
             </div>
           </div>
           <div id="attendees-table-container">${renderAttendeesTable(originalRegistros, currentSortOrder)}</div>
@@ -747,23 +757,34 @@ async function openEventDetail(id, tipoKey) {
       });
     }
 
-    const exportBtn = document.getElementById('export-csv-btn');
-    if (exportBtn) {
-      if (originalRegistros.length === 0) {
-        exportBtn.disabled = true;
-        exportBtn.title = "No hay asistentes registrados para exportar";
-        exportBtn.style.opacity = '0.6';
-        exportBtn.style.cursor = 'not-allowed';
-      } else {
-        exportBtn.disabled = false;
-        exportBtn.removeAttribute('title');
-        exportBtn.style.opacity = '';
-        exportBtn.style.cursor = '';
-        exportBtn.addEventListener('click', () => {
-          downloadAttendeesCSV(originalRegistros, e.titulo);
-          toast('Exportando asistentes...', '');
-        });
-      }
+    const reportBtn = document.getElementById('report-dropdown-btn');
+    const reportDropdown = document.getElementById('report-dropdown');
+    if (reportBtn && reportDropdown) {
+      reportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reportDropdown.style.display = reportDropdown.style.display === 'block' ? 'none' : 'block';
+      });
+
+      const eventoDatos = e;
+
+      document.getElementById('export-excel').addEventListener('click', (ev) => {
+        ev.preventDefault();
+        reportDropdown.style.display = 'none';
+        downloadFullReportCSV(eventoDatos, originalRegistros);
+      });
+
+      document.getElementById('export-pdf').addEventListener('click', (ev) => {
+        ev.preventDefault();
+        reportDropdown.style.display = 'none';
+        downloadFullReportPDF(eventoDatos, originalRegistros);
+      });
+
+      // Cerrar el dropdown al hacer clic fuera
+      document.addEventListener('click', (ev) => {
+        if (!reportBtn.contains(ev.target) && !reportDropdown.contains(ev.target)) {
+          reportDropdown.style.display = 'none';
+        }
+      }, { once: true });
     }
   }
 
@@ -772,6 +793,106 @@ async function openEventDetail(id, tipoKey) {
         <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
     `;
   showModal();
+}
+
+function downloadFullReportCSV(evento, registros) {
+  const totalAsistentes = registros.length + (evento.asistentes_manuales || 0);
+  let csvContent = '';
+
+  // Metadatos del evento
+  csvContent += `"Título:","${evento.titulo}"\n`;
+  csvContent += `"Fecha:","${fmtDate(evento.fechaInicio)}"${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}\n`;
+  csvContent += `"Tipo de evento:","${evento.tipoEvento}"\n`;
+  csvContent += `"Clasificación:","${evento.clasificacion}"\n`;
+  csvContent += `"Capacidad:","${evento.capacidad}"\n`;
+  csvContent += `"Total asistentes:","${totalAsistentes}"\n\n`;
+
+  // Tabla de asistentes
+  const headers = ['Nombres', 'Apellidos', 'Email', 'Identificación', 'Cargo', 'Institución', 'Fecha de registro'];
+  csvContent += headers.join(',') + '\n';
+
+  if (registros.length > 0) {
+    registros.forEach(r => {
+      csvContent += [
+        r.nombres,
+        r.apellidos,
+        r.email,
+        `${r.tipo_id} ${r.identificacion}`,
+        r.cargo,
+        r.institucion,
+        new Date(r.fecha_registro).toLocaleString('es-CO')
+      ].map(cell => `"${cell}"`).join(',') + '\n';
+    });
+  } else {
+    csvContent += 'Sin asistentes registrados\n';
+  }
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast('Informe Excel descargado');
+}
+
+async function downloadFullReportPDF(evento, registros) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  // Título
+  doc.setFontSize(18);
+  doc.text(evento.titulo, 14, 22);
+  doc.setFontSize(11);
+
+  let y = 35;
+  const addLine = (label, value) => {
+    doc.text(`${label}: ${value}`, 14, y);
+    y += 7;
+  };
+
+  const totalAsistentes = registros.length + (evento.asistentes_manuales || 0);
+
+  addLine('Fecha', `${fmtDate(evento.fechaInicio)}${evento.fechaFin && evento.fechaFin !== evento.fechaInicio ? ' → ' + fmtDate(evento.fechaFin) : ''}`);
+  addLine('Tipo', evento.tipoEvento);
+  addLine('Clasificación', evento.clasificacion);
+  addLine('Capacidad', evento.capacidad.toString());
+  addLine('Total asistentes', totalAsistentes.toString());
+
+  y += 5;
+
+  // Tabla de asistentes
+  if (registros.length > 0) {
+    doc.text('Lista de asistentes:', 14, y);
+    y += 6;
+    // Cabecera de tabla
+    doc.setFillColor(0, 156, 26);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(14, y, 180, 7, 'F');
+    doc.text('Nombre', 16, y + 5);
+    doc.text('Email', 70, y + 5);
+    doc.text('Identificación', 120, y + 5);
+    doc.text('Institución', 155, y + 5);
+    doc.setTextColor(0, 0, 0);
+    y += 7;
+
+    registros.forEach((r, idx) => {
+      if (y > 270) { // Salto de página
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(`${r.nombres} ${r.apellidos}`, 16, y + 5);
+      doc.text(r.email, 70, y + 5);
+      doc.text(`${r.tipo_id} ${r.identificacion}`, 120, y + 5);
+      doc.text(r.institucion, 155, y + 5);
+      y += 7;
+    });
+  } else {
+    doc.text('No se registraron asistentes en este evento.', 14, y);
+  }
+
+  doc.save(`informe-${evento.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
+  toast('Informe PDF descargado');
 }
 
 // ---------- FORMULARIO EVENTO (ADMIN) ----------
