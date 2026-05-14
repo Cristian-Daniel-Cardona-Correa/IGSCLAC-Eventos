@@ -30,6 +30,9 @@ let state = {
   filterInv: 'active',   // 'active' | 'past' | 'drafts'
   filterAdminAcad: 'all', // 'all' | 'active' | 'past' | 'drafts'
   filterAdminInv: 'all',  // 'all' | 'active' | 'past' | 'drafts'
+  sortHome: 'date_asc',
+  sortAcad: 'date_asc',   // 'date_asc' = más cercanos
+  sortInv: 'date_asc',    // 'date_desc' = más lejanos
 };
 
 const savedView = localStorage.getItem('igsclac_view');
@@ -379,7 +382,6 @@ function buildHero() {
   hero.querySelectorAll('.slide').forEach(n => n.remove());
   slides.forEach((sl, i) => {
     const div = document.createElement('div');
-    // Clase base + clase condicional para desactivar overlay
     let slideClass = 'slide' + (i === 0 ? ' active' : '');
     if (sl.overlayActivo === false) slideClass += ' no-overlay';
     div.className = slideClass;
@@ -392,10 +394,9 @@ function buildHero() {
   const dots = $('#hero-dots'); dots.innerHTML = '';
   slides.forEach((_, i) => { const s = document.createElement('span'); s.className = i === 0 ? 'active' : ''; s.onclick = () => goSlide(i); dots.appendChild(s); });
 
-  // Agregar botón de editar para admin
+  // Botón de editar para admin
   const heroEditBtn = document.getElementById('hero-edit-btn');
   if (heroEditBtn) heroEditBtn.remove();
-
   if (state.role === 'admin') {
     const btnEdit = document.createElement('button');
     btnEdit.id = 'hero-edit-btn';
@@ -408,9 +409,10 @@ function buildHero() {
     hero.appendChild(btnEdit);
   }
 
-  // --- Soporte de swipe para móviles ---
+  // Swipe para móviles
   const heroEl = $('#hero');
-  if (heroEl) {
+  if (heroEl && !heroEl.hasAttribute('data-swipe-bound')) {
+    heroEl.setAttribute('data-swipe-bound', 'true');
     let touchStartX = 0;
     let touchEndX = 0;
 
@@ -421,18 +423,19 @@ function buildHero() {
     heroEl.addEventListener('touchend', (e) => {
       touchEndX = e.changedTouches[0].screenX;
       const diff = touchStartX - touchEndX;
-      const threshold = 40; // px mínimos para considerar swipe
+      const threshold = 40;
 
       if (Math.abs(diff) > threshold) {
         if (diff > 0) {
-          goSlide((slideIdx - 1 + slides.length) % slides.length);
-        } else {
           goSlide((slideIdx + 1) % slides.length);
+        } else {
+          goSlide((slideIdx - 1 + slides.length) % slides.length);
         }
       }
     }, { passive: true });
   }
 }
+
 function goSlide(i) {
   slideIdx = i;
   document.querySelectorAll('.slide').forEach((n, k) => n.classList.toggle('active', k === i));
@@ -554,18 +557,24 @@ async function render() {
 async function renderHome(c) {
   setBreadcrumbs([{ view: 'home', label: 'Inicio' }]);
 
-  // Cargar todos los eventos (sin paginar)
   const acad = await cargarEventos('académico', true);
   const inv = await cargarEventos('investigación', true);
-  let all = [...acad, ...inv].sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+  let all = [...acad, ...inv];
 
   // Filtrar por estado (activos, pasados)
   all = filterEventsByStatus(all, state.filterHome);
 
-  // Aplicar búsqueda si existe
   if (state.search) {
     all = all.filter(e => e.titulo.toLowerCase().includes(state.search));
   }
+
+  // Aplicar orden según el filtro actual
+  let sortOrder = state.sortHome;
+  if (state.filterHome === 'past') {
+    // Para eventos pasados, invertimos el sentido: "más cercanos" = más recientes
+    sortOrder = (sortOrder === 'date_asc') ? 'date_desc' : 'date_asc';
+  }
+  all = sortEvents(all, sortOrder);
 
   const total = all.length;
   const totalPages = Math.ceil(total / PER_PAGE);
@@ -573,13 +582,21 @@ async function renderHome(c) {
   const paginatedEvents = all.slice(start, start + PER_PAGE);
 
   const filterButtons = `
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-        <i class="fa-solid fa-circle-check"></i> Activos
-      </button>
-      <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-        <i class="fa-solid fa-calendar-check"></i> Pasados
-      </button>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <div style="display:flex; gap:8px;">
+        <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-circle-check"></i> Activos
+        </button>
+        <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-calendar-check"></i> Pasados
+        </button>
+      </div>
+      <div style="margin-left: auto;">
+        <select id="sort-select-home" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
+          <option value="date_asc" ${state.sortHome === 'date_asc' ? 'selected' : ''}>Más cercanos primero</option>
+          <option value="date_desc" ${state.sortHome === 'date_desc' ? 'selected' : ''}>Más lejanos primero</option>
+        </select>
+      </div>
     </div>
   `;
 
@@ -591,10 +608,24 @@ async function renderHome(c) {
     ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No se encontraron eventos.')}
     ${paginationHtml(state.pageHome, totalPages, 'home')}
   `;
+
+  // Asignar evento change al selector de orden
+  const sortSelect = document.getElementById('sort-select-home');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', (e) => {
+      setHomeSort(e.target.value);
+    });
+  }
 }
 
 function setHomeFilter(filterValue) {
   state.filterHome = filterValue;
+  state.pageHome = 1;
+  render();
+}
+
+function setHomeSort(sortValue) {
+  state.sortHome = sortValue;
   state.pageHome = 1;
   render();
 }
@@ -604,6 +635,7 @@ async function renderEventList(c, tipo) {
   const page = isAcad ? state.pageAcad : state.pageInv;
   const context = isAcad ? 'acad' : 'inv';
   const filter = isAcad ? state.filterAcad : state.filterInv;
+  const sort = isAcad ? state.sortAcad : state.sortInv;
 
   setBreadcrumbs([
     { view: 'home', label: 'Inicio' },
@@ -611,7 +643,7 @@ async function renderEventList(c, tipo) {
   ]);
 
   try {
-    let all = await cargarEventos(tipo, true); // Cargar incluyendo deshabilitados
+    let all = await cargarEventos(tipo, true);
 
     // Filtrar por estado (activos, pasados, borradores)
     all = filterEventsByStatus(all, filter);
@@ -620,7 +652,13 @@ async function renderEventList(c, tipo) {
       all = all.filter(e => e.titulo.toLowerCase().includes(state.search));
     }
 
-    all.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+    // Aplicar orden según el filtro actual
+    let sortOrder = sort;
+    if (filter === 'past') {
+      // Para eventos pasados, invertimos el sentido: "más cercanos" = más recientes
+      sortOrder = (sortOrder === 'date_asc') ? 'date_desc' : 'date_asc';
+    }
+    all = sortEvents(all, sortOrder);
 
     const total = all.length;
     const totalPages = Math.ceil(total / PER_PAGE);
@@ -635,13 +673,21 @@ async function renderEventList(c, tipo) {
     const paginatedEvents = all.slice(start, start + PER_PAGE);
 
     const filterButtons = `
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-          <i class="fa-solid fa-circle-check"></i> Activos
-        </button>
-        <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-          <i class="fa-solid fa-calendar-check"></i> Pasados
-        </button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+            <i class="fa-solid fa-circle-check"></i> Activos
+          </button>
+          <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+            <i class="fa-solid fa-calendar-check"></i> Pasados
+          </button>
+        </div>
+        <div style="margin-left: auto;">
+          <select id="sort-select-${context}" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
+            <option value="date_asc" ${sort === 'date_asc' ? 'selected' : ''}>Más cercanos primero</option>
+            <option value="date_desc" ${sort === 'date_desc' ? 'selected' : ''}>Más lejanos primero</option>
+          </select>
+        </div>
       </div>
     `;
 
@@ -654,6 +700,14 @@ async function renderEventList(c, tipo) {
       ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No hay eventos disponibles en este momento.')}
       ${paginationHtml(currentPage, totalPages, context)}
     `;
+
+    // Asignar evento change al selector de orden
+    const sortSelect = document.getElementById(`sort-select-${context}`);
+    if (sortSelect) {
+      sortSelect.addEventListener('change', (e) => {
+        setEventSort(context, e.target.value);
+      });
+    }
   } catch (err) {
     console.error(err);
     c.innerHTML = emptyHtml('Error al cargar eventos.');
@@ -665,6 +719,17 @@ function setEventFilter(context, filterValue) {
     state.filterAcad = filterValue;
   } else if (context === 'inv') {
     state.filterInv = filterValue;
+  }
+  state.pageAcad = 1;
+  state.pageInv = 1;
+  render();
+}
+
+function setEventSort(context, sortValue) {
+  if (context === 'acad') {
+    state.sortAcad = sortValue;
+  } else if (context === 'inv') {
+    state.sortInv = sortValue;
   }
   state.pageAcad = 1;
   state.pageInv = 1;
