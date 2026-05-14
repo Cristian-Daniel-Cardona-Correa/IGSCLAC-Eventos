@@ -216,6 +216,7 @@ let slides = [];
 let workingSlides = [];
 let originalSlides = [];
 let editorModalInstance = null;
+let cachedAllEvents = [];
 
 async function cargarHeroSlides() {
   try {
@@ -1247,35 +1248,37 @@ function abrirEditorHeroSlides() {
   workingSlides = JSON.parse(JSON.stringify(slides));
   originalSlides = JSON.parse(JSON.stringify(slides));
 
-  const modal = `
-    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) cancelarEditorHero()">
-      <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
-        <style>
-          #hero-editor-modal .form-group div[style*="display:flex"] {
-            flex-wrap: wrap;
-          }
-          #hero-editor-modal .form-group .field-error {
-            width: 100%;
-            margin-top: 4px;
-          }
-        </style>
-        <div class="modal-header" style="background:var(--primary);color:#fff;border-radius:8px 8px 0 0;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;">
-          <h3 style="margin:0;color:#fff">Editar Hero Slider</h3>
-          <button onclick="cancelarEditorHero()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#fff;">&times;</button>
-        </div>
-        <div style="padding:30px;">
-          <div id="hero-editor-content"></div>
-          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
-            <button onclick="cancelarEditorHero()" class="btn btn-secondary">Cancelar</button>
-            <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
+  // Cargar eventos una sola vez
+  (async () => {
+    const acad = await cargarEventos('académico', true);
+    const inv = await cargarEventos('investigación', true);
+    cachedAllEvents = [...acad, ...inv];
+
+    const modal = `
+      <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) cancelarEditorHero()">
+        <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
+          <style>
+            #hero-editor-modal .form-group div[style*="display:flex"] { flex-wrap: wrap; }
+            #hero-editor-modal .form-group .field-error { width: 100%; margin-top: 4px; }
+          </style>
+          <div class="modal-header" style="background:var(--primary);color:#fff;border-radius:8px 8px 0 0;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;color:#fff">Editar Hero Slider</h3>
+            <button onclick="cancelarEditorHero()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#fff;">&times;</button>
+          </div>
+          <div style="padding:30px;">
+            <div id="hero-editor-content"></div>
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+              <button onclick="cancelarEditorHero()" class="btn btn-secondary">Cancelar</button>
+              <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `;
+    `;
 
-  document.body.insertAdjacentHTML('beforeend', modal);
-  renderHeroSliderEditor();
+    document.body.insertAdjacentHTML('beforeend', modal);
+    renderHeroSliderEditor();
+  })();
 }
 
 async function renderHeroSliderEditor() {
@@ -1283,16 +1286,14 @@ async function renderHeroSliderEditor() {
   const slidesEditor = document.getElementById('hero-slides-editor');
   if (slidesEditor) slidesEditor.remove();
 
-  const acad = await cargarEventos('académico', true);
-  const inv = await cargarEventos('investigación', true);
-  const todosEventos = [...acad, ...inv];
+  const todosEventos = cachedAllEvents; // Usar eventos ya cargados
 
   let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
 
   workingSlides.forEach((slide, i) => {
     const mostrarReqAccion = slide.textoBoton && slide.textoBoton.trim() !== '';
     html += `
-      <div style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
+      <div id="slide-container-${i}" class="slide-container" data-index="${i}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
           <h3 style="margin:0;color:var(--primary)">Slide ${i + 1}</h3>
           <button onclick="eliminarSlideHero(${i})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
@@ -1345,21 +1346,24 @@ async function renderHeroSliderEditor() {
   });
 
   html += `
-    <button onclick="agregarSlideHero()" class="btn" style="align-self:flex-start;">
+    <button id="agregar-slide-btn" class="btn" style="align-self:flex-start;">
       <i class="fa-solid fa-plus"></i> Agregar slide
     </button>
   </div>`;
 
   content.innerHTML = html;
 
+  // Asignar el evento click al botón de agregar
+  document.getElementById('agregar-slide-btn').onclick = () => agregarSlideHero();
+
   // Agregar event listeners para cambio de tipo de acción
-  slides.forEach((_, i) => {
+  workingSlides.forEach((_, i) => {
     const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
     if (tipoSelect) {
       tipoSelect.addEventListener('change', () => {
         const container = document.querySelector(`.slide-accion-container-${i}`);
         const tipo = tipoSelect.value;
-        const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || slides[i].accion;
+        const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || workingSlides[i].accion;
         container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, todosEventos);
         const botonInput = document.querySelector(`.slide-boton-${i}`);
         const accionSelect = document.querySelector(`.slide-accion-${i}`);
@@ -1367,7 +1371,6 @@ async function renderHeroSliderEditor() {
       });
     }
 
-    // Lógica para habilitar/deshabilitar selects según el texto del botón
     const botonInput = document.querySelector(`.slide-boton-${i}`);
     if (botonInput) {
       const asteriscoAccion = document.querySelector(`.req-accion-${i}`);
@@ -1438,14 +1441,27 @@ function eliminarSlideHero(index) {
     return;
   }
   if (!confirm('¿Eliminar este slide?')) return;
+
   syncWorkingSlidesFromDOM();
+
+  // Eliminar del DOM
+  const slideContainer = document.getElementById(`slide-container-${index}`);
+  if (slideContainer) slideContainer.remove();
+
   workingSlides.splice(index, 1);
-  renderHeroSliderEditor();
+
+  updateSlideNumbers();
+
+  for (let i = 0; i < workingSlides.length; i++) {
+    attachEventListenersToSlide(i);
+  }
 }
 
 async function agregarSlideHero() {
+  // Sincronizar valores actuales del DOM con workingSlides antes de agregar
   syncWorkingSlidesFromDOM();
-  workingSlides.push({
+
+  const nuevoSlide = {
     titulo: 'Nuevo slide',
     descripcion: 'Descripción del nuevo slide',
     imagen: '',
@@ -1453,8 +1469,127 @@ async function agregarSlideHero() {
     tipoAccion: 'navegacion',
     accion: 'home',
     overlayActivo: true
+  };
+  const nuevoIndex = workingSlides.length;
+  workingSlides.push(nuevoSlide);
+
+  // Generar HTML del nuevo slide
+  const todosEventos = cachedAllEvents;
+  const mostrarReqAccion = nuevoSlide.textoBoton && nuevoSlide.textoBoton.trim() !== '';
+  const nuevoSlideHtml = `
+    <div id="slide-container-${nuevoIndex}" class="slide-container" data-index="${nuevoIndex}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9; margin-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h3 style="margin:0;color:var(--primary)">Slide ${nuevoIndex + 1}</h3>
+        <button onclick="eliminarSlideHero(${nuevoIndex})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
+          <i class="fa-solid fa-trash"></i> Eliminar
+        </button>
+      </div>
+      <div class="form-group">
+        <label>Título <span class="req">*</span></label>
+        <input type="text" class="slide-titulo-${nuevoIndex}" value="${esc(nuevoSlide.titulo)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      </div>
+      <div class="form-group">
+        <label>Descripción:</label>
+        <textarea class="slide-descripcion-${nuevoIndex}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(nuevoSlide.descripcion)}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Imagen: <span class="req">*</span></label>
+        <div style="display:flex; gap:8px;">
+          <input type="url" class="slide-imagen-${nuevoIndex}" placeholder="https://..." value="${esc(nuevoSlide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+          <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${nuevoIndex})" title="Subir imagen desde WordPress">
+            <i class="fa-solid fa-upload"></i>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Texto del botón:</label>
+        <input type="text" class="slide-boton-${nuevoIndex}" value="${esc(nuevoSlide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label class="checkbox-row">
+          <input type="checkbox" class="slide-overlay-${nuevoIndex}" ${nuevoSlide.overlayActivo ? 'checked' : ''}>
+          Activar difuminado verde (overlay)
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Tipo de acción:</label>
+        <select class="slide-tipo-${nuevoIndex}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+          <option value="navegacion" ${nuevoSlide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
+          <option value="evento" ${nuevoSlide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
+          <option value="evento_pasado" ${nuevoSlide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Acción: <span class="req-accion-${nuevoIndex}" style="color:#c0392b; display:${mostrarReqAccion ? 'inline' : 'none'};">*</span></label>
+        <div class="slide-accion-container-${nuevoIndex}">
+          ${renderAccionInput(nuevoIndex, nuevoSlide, todosEventos)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const container = document.getElementById('hero-slides-editor');
+  // Insertar antes del botón "Agregar slide"
+  const addButton = document.getElementById('agregar-slide-btn');
+  container.insertBefore(createElementFromHTML(nuevoSlideHtml), addButton);
+
+  // Actualizar los números de los títulos de todos los slides (por si cambió el orden)
+  updateSlideNumbers();
+
+  // Agregar event listeners al nuevo slide
+  attachEventListenersToSlide(nuevoIndex);
+}
+
+// Helper para convertir HTML string a nodo
+function createElementFromHTML(htmlString) {
+  const div = document.createElement('div');
+  div.innerHTML = htmlString.trim();
+  return div.firstChild;
+}
+
+// Actualizar los números de los títulos "Slide X" y los data-index
+function updateSlideNumbers() {
+  const slideContainers = document.querySelectorAll('#hero-slides-editor .slide-container');
+  slideContainers.forEach((container, idx) => {
+    const titleH3 = container.querySelector('h3');
+    if (titleH3) titleH3.textContent = `Slide ${idx + 1}`;
+    container.setAttribute('data-index', idx);
   });
-  await renderHeroSliderEditor();
+}
+
+// Adjuntar event listeners a un slide específico (cambio de tipoAcción, etc.)
+function attachEventListenersToSlide(i) {
+  const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
+  const botonInput = document.querySelector(`.slide-boton-${i}`);
+  if (!tipoSelect || !botonInput) return;
+
+  tipoSelect.addEventListener('change', () => {
+    const container = document.querySelector(`.slide-accion-container-${i}`);
+    const tipo = tipoSelect.value;
+    const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || workingSlides[i]?.accion || '';
+    container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, cachedAllEvents);
+    const accionSelect = document.querySelector(`.slide-accion-${i}`);
+    if (accionSelect && botonInput) accionSelect.disabled = botonInput.value.trim() === '';
+  });
+
+  const asteriscoAccion = document.querySelector(`.req-accion-${i}`);
+  const tipoSelect2 = document.querySelector(`.slide-tipo-${i}`);
+  const toggleAsteriscoYDisabled = () => {
+    const tieneTexto = botonInput.value.trim() !== '';
+    if (asteriscoAccion) asteriscoAccion.style.display = tieneTexto ? 'inline' : 'none';
+    if (tipoSelect2) tipoSelect2.disabled = !tieneTexto;
+    const accionSelect = document.querySelector(`.slide-accion-${i}`);
+    if (accionSelect) {
+      accionSelect.disabled = !tieneTexto;
+      if (!tieneTexto) {
+        const existingError = accionSelect.parentNode.querySelector('.field-error');
+        if (existingError) existingError.remove();
+        accionSelect.classList.remove('error');
+      }
+    }
+  };
+  botonInput.addEventListener('input', toggleAsteriscoYDisabled);
+  toggleAsteriscoYDisabled();
 }
 
 async function guardarHeroSlidesCambios() {
