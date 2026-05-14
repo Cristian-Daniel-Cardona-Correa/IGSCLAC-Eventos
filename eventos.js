@@ -1352,7 +1352,7 @@ async function renderHeroSliderEditor() {
   </div>`;
 
   content.innerHTML = html;
-  
+
   renumberSlides();
   for (let i = 0; i < workingSlides.length; i++) {
     attachEventListenersToSlide(i);
@@ -1693,18 +1693,20 @@ async function guardarHeroSlidesCambios() {
 function renumberSlides() {
   const containers = document.querySelectorAll('#hero-slides-editor .slide-container');
   containers.forEach((container, newIndex) => {
+    // Actualizar el id del contenedor principal
+    if (container.id) {
+      container.id = container.id.replace(/\d+$/, newIndex);
+    }
     // Actualizar data-index
     container.setAttribute('data-index', newIndex);
     // Actualizar título <h3>
     const titleH3 = container.querySelector('h3');
     if (titleH3) titleH3.textContent = `Slide ${newIndex + 1}`;
-
     // Actualizar el onclick del botón eliminar
     const deleteBtn = container.querySelector('button[onclick^="eliminarSlideHero"]');
     if (deleteBtn) {
       deleteBtn.setAttribute('onclick', `eliminarSlideHero(${newIndex})`);
     }
-
     // Actualizar clases e IDs de todos los elementos dentro del slide
     const elementsWithIndex = container.querySelectorAll('[class*="-"], [id*="-"]');
     elementsWithIndex.forEach(el => {
