@@ -396,6 +396,10 @@ textarea {
     color: #fff
 }
 
+.slide.no-overlay::before {
+    display: none;
+}
+
 .hero-dots {
     position: absolute;
     bottom: 20px;
@@ -675,6 +679,7 @@ textarea {
 #report-dropdown a {
     transition: background 0.2s;
 }
+
 #report-dropdown a:hover {
     background: #f5f9f5;
     color: var(--primary);

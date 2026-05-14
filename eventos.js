@@ -220,11 +220,14 @@ async function cargarHeroSlides() {
       credentials: 'same-origin'
     });
     if (!response.ok) throw new Error('Error cargando slides');
-    const datos = await response.json();
-    slides = datos || [];
+    let datos = await response.json();
+    slides = (datos || []).map(slide => ({
+      ...slide,
+      overlayActivo: slide.overlayActivo !== undefined ? slide.overlayActivo : true
+    }));
     if (slides.length === 0) {
       slides = [
-        { titulo: 'Sin slides configurados', descripcion: 'Por favor, configure los slides desde el panel admin.', imagen: '', textoBoton: '', tipoAccion: 'navegacion', accion: 'home' }
+        { titulo: 'Sin slides configurados', descripcion: 'Por favor, configure los slides desde el panel admin.', imagen: '', textoBoton: '', tipoAccion: 'navegacion', accion: 'home', overlayActivo: true }
       ];
     }
     buildHero();
@@ -372,7 +375,10 @@ function buildHero() {
   hero.querySelectorAll('.slide').forEach(n => n.remove());
   slides.forEach((sl, i) => {
     const div = document.createElement('div');
-    div.className = 'slide' + (i === 0 ? ' active' : '');
+    // Clase base + clase condicional para desactivar overlay
+    let slideClass = 'slide' + (i === 0 ? ' active' : '');
+    if (sl.overlayActivo === false) slideClass += ' no-overlay';
+    div.className = slideClass;
     div.style.backgroundImage = `url('${sl.imagen || ''}')`;
     const accion = generarAccionSlide(sl);
     const botonHtml = sl.textoBoton ? `<a href="#" class="slide-cta" data-accion-tipo="${accion.tipoAccion}" data-accion-valor="${esc(accion.accion)}">${esc(sl.textoBoton)} <i class="fa-solid fa-arrow-right"></i></a>` : '';
@@ -1248,12 +1254,8 @@ function abrirEditorHeroSlides() {
 async function renderHeroSliderEditor() {
   const content = document.getElementById('hero-editor-content');
   const slidesEditor = document.getElementById('hero-slides-editor');
+  if (slidesEditor) slidesEditor.remove();
 
-  if (slidesEditor) {
-    slidesEditor.remove();
-  }
-
-  // Cargar todos los eventos
   const acad = await cargarEventos('académico', true);
   const inv = await cargarEventos('investigación', true);
   const todosEventos = [...acad, ...inv];
@@ -1261,7 +1263,6 @@ async function renderHeroSliderEditor() {
   let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
 
   slides.forEach((slide, i) => {
-    // Determinar si mostrar asterisco en acción (si hay texto en botón)
     const mostrarReqAccion = slide.textoBoton && slide.textoBoton.trim() !== '';
     html += `
       <div style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
@@ -1292,6 +1293,12 @@ async function renderHeroSliderEditor() {
           <label>Texto del botón:</label>
           <input type="text" class="slide-boton-${i}" value="${esc(slide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
         </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label class="checkbox-row">
+            <input type="checkbox" class="slide-overlay-${i}" ${slide.overlayActivo ? 'checked' : ''}>
+            Activar difuminado verde (overlay)
+          </label>
+        </div>
         <div class="form-group">
           <label>Tipo de acción:</label>
           <select class="slide-tipo-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
@@ -1318,7 +1325,7 @@ async function renderHeroSliderEditor() {
 
   content.innerHTML = html;
 
-  // Agregar event listeners para cambiar tipo de acción
+  // Agregar event listeners para cambio de tipo de acción
   slides.forEach((_, i) => {
     const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
     if (tipoSelect) {
@@ -1327,31 +1334,24 @@ async function renderHeroSliderEditor() {
         const tipo = tipoSelect.value;
         const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || slides[i].accion;
         container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, todosEventos);
-
-        // Después de regenerar el select, aplicar el estado disabled según el texto del botón
         const botonInput = document.querySelector(`.slide-boton-${i}`);
         const accionSelect = document.querySelector(`.slide-accion-${i}`);
-        if (accionSelect && botonInput) {
-          accionSelect.disabled = botonInput.value.trim() === '';
-        }
+        if (accionSelect && botonInput) accionSelect.disabled = botonInput.value.trim() === '';
       });
     }
 
-    // Agregar evento para mostrar/ocultar asterisco y habilitar/deshabilitar el select de acción
+    // Lógica para habilitar/deshabilitar selects según el texto del botón
     const botonInput = document.querySelector(`.slide-boton-${i}`);
     if (botonInput) {
       const asteriscoAccion = document.querySelector(`.req-accion-${i}`);
+      const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
       const toggleAsteriscoYDisabled = () => {
         const tieneTexto = botonInput.value.trim() !== '';
-        // Mostrar u ocultar asterisco
-        if (asteriscoAccion) {
-          asteriscoAccion.style.display = tieneTexto ? 'inline' : 'none';
-        }
-        // Habilitar o deshabilitar el select de acción
+        if (asteriscoAccion) asteriscoAccion.style.display = tieneTexto ? 'inline' : 'none';
+        if (tipoSelect) tipoSelect.disabled = !tieneTexto;
         const accionSelect = document.querySelector(`.slide-accion-${i}`);
         if (accionSelect) {
           accionSelect.disabled = !tieneTexto;
-          // Si se deshabilita, también eliminamos cualquier error que tenga
           if (!tieneTexto) {
             const existingError = accionSelect.parentNode.querySelector('.field-error');
             if (existingError) existingError.remove();
@@ -1360,7 +1360,7 @@ async function renderHeroSliderEditor() {
         }
       };
       botonInput.addEventListener('input', toggleAsteriscoYDisabled);
-      toggleAsteriscoYDisabled(); // inicializar estado
+      toggleAsteriscoYDisabled();
     }
   });
 }
@@ -1421,134 +1421,94 @@ async function agregarSlideHero() {
     imagen: '',
     textoBoton: 'Botón',
     tipoAccion: 'navegacion',
-    accion: 'home'
+    accion: 'home',
+    overlayActivo: true
   });
   await renderHeroSliderEditor();
 }
 
-async function renderHeroSliderEditor() {
-  const content = document.getElementById('hero-editor-content');
-  const slidesEditor = document.getElementById('hero-slides-editor');
+async function guardarHeroSlidesCambios() {
+  // 1. Limpiar todos los errores previos en el modal del editor
+  const editorModal = document.getElementById('hero-editor-modal');
+  editorModal.querySelectorAll('.field-error').forEach(el => el.remove());
+  editorModal.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
 
-  if (slidesEditor) {
-    slidesEditor.remove();
+  let hayErrores = false;
+
+  // 2. Validar cada slide en un solo bucle
+  slides.forEach((_, i) => {
+    // --- Validar título ---
+    const tituloInput = document.querySelector(`.slide-titulo-${i}`);
+    const titulo = tituloInput?.value?.trim() || '';
+    if (!titulo) {
+      showFieldError(tituloInput, 'El título del slide es obligatorio.');
+      hayErrores = true;
+    }
+
+    // --- Validar imagen ---
+    const imagenInput = document.querySelector(`.slide-imagen-${i}`);
+    const imagen = imagenInput?.value?.trim() || '';
+    if (!imagen) {
+      showFieldError(imagenInput, 'La imagen es obligatoria para el slide.');
+      hayErrores = true;
+    }
+
+    // --- Validar acción SOLO si el texto del botón no está vacío ---
+    const botonInput = document.querySelector(`.slide-boton-${i}`);
+    const textoBoton = botonInput?.value?.trim() || '';
+
+    if (textoBoton !== '') {
+      const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
+      if (tipoAccion === 'evento' || tipoAccion === 'evento_pasado') {
+        const accionSelect = document.querySelector(`.slide-accion-${i}`);
+        const accion = accionSelect?.value || '';
+        if (!accion) {
+          showFieldError(accionSelect, 'Debes seleccionar un evento para esta acción (el botón tiene texto).');
+          hayErrores = true;
+        }
+      }
+    } else {
+      // Si no hay texto en el botón, limpiamos cualquier error previo del campo acción
+      const accionSelect = document.querySelector(`.slide-accion-${i}`);
+      if (accionSelect) {
+        const existingError = accionSelect.parentNode.querySelector('.field-error');
+        if (existingError) existingError.remove();
+        accionSelect.classList.remove('error');
+      }
+    }
+  });
+
+  // 3. Si hay errores, mostrar el primer error y detener
+  if (hayErrores) {
+    const primerError = editorModal.querySelector('.field-error');
+    if (primerError) {
+      primerError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    toast('Por favor corrige los errores antes de guardar.', 'error');
+    return;
   }
 
-  // Cargar todos los eventos
-  const acad = await cargarEventos('académico', true);
-  const inv = await cargarEventos('investigación', true);
-  const todosEventos = [...acad, ...inv];
-
-  let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
-
-  slides.forEach((slide, i) => {
-    // Determinar si mostrar asterisco en acción (si hay texto en botón)
-    const mostrarReqAccion = slide.textoBoton && slide.textoBoton.trim() !== '';
-    html += `
-      <div style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-          <h3 style="margin:0;color:var(--primary)">Slide ${i + 1}</h3>
-          <button onclick="eliminarSlideHero(${i})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
-            <i class="fa-solid fa-trash"></i> Eliminar
-          </button>
-        </div>
-        <div class="form-group">
-          <label>Título <span class="req">*</span></label>
-          <input type="text" class="slide-titulo-${i}" value="${esc(slide.titulo)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-        </div>
-        <div class="form-group">
-          <label>Descripción:</label>
-          <textarea class="slide-descripcion-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(slide.descripcion)}</textarea>
-        </div>
-        <div class="form-group">
-          <label>Imagen: <span class="req">*</span></label>
-          <div style="display:flex; gap:8px;">
-            <input type="url" class="slide-imagen-${i}" placeholder="https://..." value="${esc(slide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${i})" title="Subir imagen desde WordPress">
-              <i class="fa-solid fa-upload"></i>
-            </button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Texto del botón:</label>
-          <input type="text" class="slide-boton-${i}" value="${esc(slide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-        </div>
-        <div class="form-group">
-          <label>Tipo de acción:</label>
-          <select class="slide-tipo-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-            <option value="navegacion" ${slide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
-            <option value="evento" ${slide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
-            <option value="evento_pasado" ${slide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Acción: <span class="req-accion-${i}" style="color:#c0392b; display:${mostrarReqAccion ? 'inline' : 'none'};">*</span></label>
-          <div class="slide-accion-container-${i}">
-            ${renderAccionInput(i, slide, todosEventos)}
-          </div>
-        </div>
-      </div>
-    `;
-  });
-
-  html += `
-    <button onclick="agregarSlideHero()" class="btn" style="align-self:flex-start;">
-      <i class="fa-solid fa-plus"></i> Agregar slide
-    </button>
-  </div>`;
-
-  content.innerHTML = html;
-
-  // Agregar event listeners para cambiar tipo de acción
+  // 4. Construir array con los valores (incluyendo overlayActivo)
+  const slidesEditados = [];
   slides.forEach((_, i) => {
-    const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
-    if (tipoSelect) {
-      tipoSelect.addEventListener('change', () => {
-        const container = document.querySelector(`.slide-accion-container-${i}`);
-        const tipo = tipoSelect.value;
-        const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || slides[i].accion;
-        container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, todosEventos);
+    const titulo = document.querySelector(`.slide-titulo-${i}`)?.value || '';
+    const descripcion = document.querySelector(`.slide-descripcion-${i}`)?.value || '';
+    const imagen = document.querySelector(`.slide-imagen-${i}`)?.value || '';
+    const textoBoton = document.querySelector(`.slide-boton-${i}`)?.value || '';
+    const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
+    const accion = document.querySelector(`.slide-accion-${i}`)?.value || '';
+    const overlayCheckbox = document.querySelector(`.slide-overlay-${i}`);
+    const overlayActivo = overlayCheckbox ? overlayCheckbox.checked : true;
 
-        // Después de regenerar el select, aplicar el estado disabled según el texto del botón
-        const botonInput = document.querySelector(`.slide-boton-${i}`);
-        const accionSelect = document.querySelector(`.slide-accion-${i}`);
-        if (accionSelect && botonInput) {
-          accionSelect.disabled = botonInput.value.trim() === '';
-        }
-      });
-    }
-
-    // Agregar evento para mostrar/ocultar asterisco y habilitar/deshabilitar los selects
-    const botonInput = document.querySelector(`.slide-boton-${i}`);
-    if (botonInput) {
-      const asteriscoAccion = document.querySelector(`.req-accion-${i}`);
-      const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
-      const toggleAsteriscoYDisabled = () => {
-        const tieneTexto = botonInput.value.trim() !== '';
-        // Mostrar u ocultar asterisco
-        if (asteriscoAccion) {
-          asteriscoAccion.style.display = tieneTexto ? 'inline' : 'none';
-        }
-        // Habilitar o deshabilitar el select de tipo de acción
-        if (tipoSelect) {
-          tipoSelect.disabled = !tieneTexto;
-        }
-        // Habilitar o deshabilitar el select de acción
-        const accionSelect = document.querySelector(`.slide-accion-${i}`);
-        if (accionSelect) {
-          accionSelect.disabled = !tieneTexto;
-          // Si se deshabilita, también eliminamos cualquier error que tenga
-          if (!tieneTexto) {
-            const existingError = accionSelect.parentNode.querySelector('.field-error');
-            if (existingError) existingError.remove();
-            accionSelect.classList.remove('error');
-          }
-        }
-      };
-      botonInput.addEventListener('input', toggleAsteriscoYDisabled);
-      toggleAsteriscoYDisabled(); // inicializar estado
-    }
+    slidesEditados.push({
+      titulo, descripcion, imagen, textoBoton, tipoAccion, accion, overlayActivo
+    });
   });
+
+  // 5. Guardar
+  await guardarHeroSlides(slidesEditados);
+  document.getElementById('hero-editor-modal').remove();
+  await render();
 }
 
 // ---------- FORMULARIO EVENTO (ADMIN) ----------

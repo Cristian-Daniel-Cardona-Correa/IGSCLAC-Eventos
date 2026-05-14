@@ -707,7 +707,8 @@ function igsclac_obtener_hero_slides_default() {
             'imagen' => 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1600',
             'textoBoton' => 'Ver eventos académicos',
             'tipoAccion' => 'navegacion',
-            'accion' => 'academicos'
+            'accion' => 'academicos',
+            'overlayActivo' => true
         ),
         array(
             'titulo' => 'Eventos de Investigación',
@@ -715,7 +716,8 @@ function igsclac_obtener_hero_slides_default() {
             'imagen' => 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1600',
             'textoBoton' => 'Explorar investigación',
             'tipoAccion' => 'navegacion',
-            'accion' => 'investigacion'
+            'accion' => 'investigacion',
+            'overlayActivo' => true
         ),
         array(
             'titulo' => 'Inscríbete a nuestros eventos',
@@ -723,7 +725,8 @@ function igsclac_obtener_hero_slides_default() {
             'imagen' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600',
             'textoBoton' => 'Ver agenda completa',
             'tipoAccion' => 'navegacion',
-            'accion' => 'home'
+            'accion' => 'home',
+            'overlayActivo' => true
         )
     );
 }
@@ -742,6 +745,13 @@ function igsclac_obtener_hero_slides() {
     if (!$slides || !is_array($slides)) {
         $slides = igsclac_obtener_hero_slides_default();
         update_option('igsclac_hero_slides', $slides);
+    } else {
+        foreach ($slides as &$slide) {
+            if (!isset($slide['overlayActivo'])) {
+                $slide['overlayActivo'] = true;
+            }
+        }
+        unset($slide);
     }
     return rest_ensure_response($slides);
 }
@@ -761,7 +771,8 @@ function igsclac_guardar_hero_slides($request) {
             'imagen' => esc_url_raw($slide['imagen'] ?? ''),
             'textoBoton' => sanitize_text_field($slide['textoBoton'] ?? ''),
             'tipoAccion' => sanitize_text_field($slide['tipoAccion'] ?? 'navegacion'),
-            'accion' => sanitize_text_field($slide['accion'] ?? '')
+            'accion' => sanitize_text_field($slide['accion'] ?? ''),
+            'overlayActivo' => isset($slide['overlayActivo']) ? (bool) $slide['overlayActivo'] : true
         );
         $slides[] = $procesado;
     }
