@@ -1433,13 +1433,18 @@ function renderAccionInput(index, slide, todosEventos = []) {
 }
 
 function eliminarSlideHero(index) {
-  if (workingSlides.length <= 1) { toast('Debes tener al menos 1 slide', 'error'); return; }
+  if (workingSlides.length <= 1) {
+    toast('Debes tener al menos 1 slide', 'error');
+    return;
+  }
   if (!confirm('¿Eliminar este slide?')) return;
+  syncWorkingSlidesFromDOM();
   workingSlides.splice(index, 1);
   renderHeroSliderEditor();
 }
 
 async function agregarSlideHero() {
+  syncWorkingSlidesFromDOM();
   workingSlides.push({
     titulo: 'Nuevo slide',
     descripcion: 'Descripción del nuevo slide',
@@ -1538,6 +1543,30 @@ async function guardarHeroSlidesCambios() {
   workingSlides = [];                    // liberar memoria
 
   editorModal.remove();
+}
+
+function syncWorkingSlidesFromDOM() {
+  for (let i = 0; i < workingSlides.length; i++) {
+    const titulo = document.querySelector(`.slide-titulo-${i}`)?.value || '';
+    const descripcion = document.querySelector(`.slide-descripcion-${i}`)?.value || '';
+    const imagen = document.querySelector(`.slide-imagen-${i}`)?.value || '';
+    const textoBoton = document.querySelector(`.slide-boton-${i}`)?.value || '';
+    const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
+    const accion = document.querySelector(`.slide-accion-${i}`)?.value || '';
+    const overlayCheckbox = document.querySelector(`.slide-overlay-${i}`);
+    const overlayActivo = overlayCheckbox ? overlayCheckbox.checked : true;
+
+    workingSlides[i] = {
+      ...workingSlides[i],
+      titulo,
+      descripcion,
+      imagen,
+      textoBoton,
+      tipoAccion,
+      accion,
+      overlayActivo
+    };
+  }
 }
 
 // ---------- FORMULARIO EVENTO (ADMIN) ----------
