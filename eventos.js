@@ -1484,7 +1484,6 @@ async function guardarHeroSlidesCambios() {
     if (primerError) {
       primerError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    toast('Por favor corrige los errores antes de guardar.', 'error');
     return;
   }
 
