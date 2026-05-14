@@ -1352,6 +1352,11 @@ async function renderHeroSliderEditor() {
   </div>`;
 
   content.innerHTML = html;
+  
+  renumberSlides();
+  for (let i = 0; i < workingSlides.length; i++) {
+    attachEventListenersToSlide(i);
+  }
 
   // Asignar el evento click al botón de agregar
   document.getElementById('agregar-slide-btn').onclick = () => agregarSlideHero();
@@ -1444,13 +1449,14 @@ function eliminarSlideHero(index) {
 
   syncWorkingSlidesFromDOM();
 
-  // Eliminar del DOM
-  const slideContainer = document.getElementById(`slide-container-${index}`);
-  if (slideContainer) slideContainer.remove();
+  const container = document.getElementById(`slide-container-${index}`);
+  if (container) container.remove();
 
   workingSlides.splice(index, 1);
 
-  updateSlideNumbers();
+  renumberSlides();
+
+  syncWorkingSlidesFromDOM();
 
   for (let i = 0; i < workingSlides.length; i++) {
     attachEventListenersToSlide(i);
@@ -1458,7 +1464,7 @@ function eliminarSlideHero(index) {
 }
 
 async function agregarSlideHero() {
-  // Sincronizar valores actuales del DOM con workingSlides antes de agregar
+  // Sincronizar valores actuales antes de agregar
   syncWorkingSlidesFromDOM();
 
   const nuevoSlide = {
@@ -1473,7 +1479,7 @@ async function agregarSlideHero() {
   const nuevoIndex = workingSlides.length;
   workingSlides.push(nuevoSlide);
 
-  // Generar HTML del nuevo slide
+  // Generar HTML con marcadores de posición
   const todosEventos = cachedAllEvents;
   const mostrarReqAccion = nuevoSlide.textoBoton && nuevoSlide.textoBoton.trim() !== '';
   const nuevoSlideHtml = `
@@ -1528,16 +1534,20 @@ async function agregarSlideHero() {
     </div>
   `;
 
-  const container = document.getElementById('hero-slides-editor');
-  // Insertar antes del botón "Agregar slide"
+  const editorContainer = document.getElementById('hero-slides-editor');
   const addButton = document.getElementById('agregar-slide-btn');
-  container.insertBefore(createElementFromHTML(nuevoSlideHtml), addButton);
+  editorContainer.insertBefore(createElementFromHTML(nuevoSlideHtml), addButton);
 
-  // Actualizar los números de los títulos de todos los slides (por si cambió el orden)
-  updateSlideNumbers();
+  // Renumerar todos los slides
+  renumberSlides();
 
-  // Agregar event listeners al nuevo slide
-  attachEventListenersToSlide(nuevoIndex);
+  // Sincronizar workingSlides con el DOM después de renumerar
+  syncWorkingSlidesFromDOM();
+
+  // Reasignar event listeners a todos los slides
+  for (let i = 0; i < workingSlides.length; i++) {
+    attachEventListenersToSlide(i);
+  }
 }
 
 // Helper para convertir HTML string a nodo
@@ -1678,6 +1688,34 @@ async function guardarHeroSlidesCambios() {
   workingSlides = [];                    // liberar memoria
 
   editorModal.remove();
+}
+
+function renumberSlides() {
+  const containers = document.querySelectorAll('#hero-slides-editor .slide-container');
+  containers.forEach((container, newIndex) => {
+    // Actualizar data-index
+    container.setAttribute('data-index', newIndex);
+    // Actualizar título <h3>
+    const titleH3 = container.querySelector('h3');
+    if (titleH3) titleH3.textContent = `Slide ${newIndex + 1}`;
+
+    // Actualizar el onclick del botón eliminar
+    const deleteBtn = container.querySelector('button[onclick^="eliminarSlideHero"]');
+    if (deleteBtn) {
+      deleteBtn.setAttribute('onclick', `eliminarSlideHero(${newIndex})`);
+    }
+
+    // Actualizar clases e IDs de todos los elementos dentro del slide
+    const elementsWithIndex = container.querySelectorAll('[class*="-"], [id*="-"]');
+    elementsWithIndex.forEach(el => {
+      if (el.id) {
+        el.id = el.id.replace(/\d+$/, newIndex);
+      }
+      if (el.className && typeof el.className === 'string') {
+        el.className = el.className.replace(/-\d+\b/g, `-${newIndex}`);
+      }
+    });
+  });
 }
 
 function syncWorkingSlidesFromDOM() {
