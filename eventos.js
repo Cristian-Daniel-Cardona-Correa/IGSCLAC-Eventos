@@ -2851,7 +2851,17 @@ async function renderUpcoming() {
 }
 
 // ---------- MODAL ----------
-function showModal() { $('#modal-overlay').classList.add('show'); document.body.style.overflow = 'hidden'; }
+function showModal() {
+  const modalOverlay = $('#modal-overlay');
+  modalOverlay.classList.add('show');
+  document.body.style.overflow = 'hidden';
+
+  // Reiniciar el scroll del modal a la posición inicial
+  const modalEl = modalOverlay.querySelector('.modal');
+  if (modalEl) {
+    modalEl.scrollTop = 0;
+  }
+}
 function closeModal() { $('#modal-overlay').classList.remove('show'); document.body.style.overflow = ''; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
