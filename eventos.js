@@ -213,6 +213,9 @@ async function crearRegistro(data) {
 
 // ---------- HERO SLIDER ----------
 let slides = [];
+let workingSlides = [];
+let originalSlides = [];
+let editorModalInstance = null;
 
 async function cargarHeroSlides() {
   try {
@@ -1217,11 +1220,35 @@ async function guardarHeroSlides(slides) {
   }
 }
 
+function cancelarEditorHero() {
+  // Comparar si hay cambios
+  const hayCambios = JSON.stringify(workingSlides) !== JSON.stringify(originalSlides);
+
+  if (hayCambios) {
+    if (!confirm('Hay cambios sin guardar. ¿Deseas descartarlos y cerrar el editor?')) {
+      return;
+    }
+  }
+
+  const modal = document.getElementById('hero-editor-modal');
+  if (modal) modal.remove();
+
+  slides = JSON.parse(JSON.stringify(originalSlides));
+  workingSlides = [];
+  originalSlides = [];
+
+  buildHero();
+}
+
 function abrirEditorHeroSlides() {
   if (state.role !== 'admin') { toast('Solo el administrador puede editar el hero', 'error'); return; }
 
+  // Crear copia profunda del estado actual
+  workingSlides = JSON.parse(JSON.stringify(slides));
+  originalSlides = JSON.parse(JSON.stringify(slides));
+
   const modal = `
-    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) document.getElementById('hero-editor-modal').remove()">
+    <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) cancelarEditorHero()">
       <div style="background:white;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:0;display:flex;flex-direction:column;">
         <style>
           #hero-editor-modal .form-group div[style*="display:flex"] {
@@ -1234,12 +1261,12 @@ function abrirEditorHeroSlides() {
         </style>
         <div class="modal-header" style="background:var(--primary);color:#fff;border-radius:8px 8px 0 0;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;">
           <h3 style="margin:0;color:#fff">Editar Hero Slider</h3>
-          <button onclick="document.getElementById('hero-editor-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#fff;">&times;</button>
+          <button onclick="cancelarEditorHero()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#fff;">&times;</button>
         </div>
         <div style="padding:30px;">
           <div id="hero-editor-content"></div>
           <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
-            <button onclick="document.getElementById('hero-editor-modal').remove()" class="btn btn-secondary">Cancelar</button>
+            <button onclick="cancelarEditorHero()" class="btn btn-secondary">Cancelar</button>
             <button onclick="guardarHeroSlidesCambios()" class="btn">Guardar cambios</button>
           </div>
         </div>
@@ -1262,7 +1289,7 @@ async function renderHeroSliderEditor() {
 
   let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
 
-  slides.forEach((slide, i) => {
+  workingSlides.forEach((slide, i) => {
     const mostrarReqAccion = slide.textoBoton && slide.textoBoton.trim() !== '';
     html += `
       <div style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
@@ -1406,16 +1433,14 @@ function renderAccionInput(index, slide, todosEventos = []) {
 }
 
 function eliminarSlideHero(index) {
-  if (slides.length <= 1) { toast('Debes tener al menos 1 slide', 'error'); return; }
+  if (workingSlides.length <= 1) { toast('Debes tener al menos 1 slide', 'error'); return; }
   if (!confirm('¿Eliminar este slide?')) return;
-
-  const nuevosSlides = slides.filter((_, i) => i !== index);
-  slides = nuevosSlides;
+  workingSlides.splice(index, 1);
   renderHeroSliderEditor();
 }
 
 async function agregarSlideHero() {
-  slides.push({
+  workingSlides.push({
     titulo: 'Nuevo slide',
     descripcion: 'Descripción del nuevo slide',
     imagen: '',
@@ -1435,8 +1460,8 @@ async function guardarHeroSlidesCambios() {
 
   let hayErrores = false;
 
-  // 2. Validar cada slide en un solo bucle
-  slides.forEach((_, i) => {
+  // 2. Validar cada slide usando workingSlides (la copia de trabajo)
+  for (let i = 0; i < workingSlides.length; i++) {
     // --- Validar título ---
     const tituloInput = document.querySelector(`.slide-titulo-${i}`);
     const titulo = tituloInput?.value?.trim() || '';
@@ -1476,9 +1501,9 @@ async function guardarHeroSlidesCambios() {
         accionSelect.classList.remove('error');
       }
     }
-  });
+  }
 
-  // 3. Si hay errores, mostrar el primer error y detener
+  // 3. Si hay errores, mostrar el primer error y detener la ejecución
   if (hayErrores) {
     const primerError = editorModal.querySelector('.field-error');
     if (primerError) {
@@ -1487,9 +1512,9 @@ async function guardarHeroSlidesCambios() {
     return;
   }
 
-  // 4. Construir array con los valores (incluyendo overlayActivo)
+  // 4. Construir el array definitivo con los valores actuales de los inputs
   const slidesEditados = [];
-  slides.forEach((_, i) => {
+  for (let i = 0; i < workingSlides.length; i++) {
     const titulo = document.querySelector(`.slide-titulo-${i}`)?.value || '';
     const descripcion = document.querySelector(`.slide-descripcion-${i}`)?.value || '';
     const imagen = document.querySelector(`.slide-imagen-${i}`)?.value || '';
@@ -1502,12 +1527,17 @@ async function guardarHeroSlidesCambios() {
     slidesEditados.push({
       titulo, descripcion, imagen, textoBoton, tipoAccion, accion, overlayActivo
     });
-  });
+  }
 
-  // 5. Guardar
+  // 5. Guardar en la base de datos
   await guardarHeroSlides(slidesEditados);
-  document.getElementById('hero-editor-modal').remove();
-  await render();
+
+  // 6. Actualizar las variables globales con los nuevos datos
+  slides = slidesEditados;               // sincronizar con la copia principal
+  originalSlides = JSON.parse(JSON.stringify(slidesEditados)); // nueva referencia original
+  workingSlides = [];                    // liberar memoria
+
+  editorModal.remove();
 }
 
 // ---------- FORMULARIO EVENTO (ADMIN) ----------
