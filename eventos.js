@@ -2506,7 +2506,7 @@ async function adminTable(list, tipoKey) {
     `;
   }
   return `<div class="table-wrap"><table>
-    <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th>Título</th><th>Fecha</th><th style="text-align:center">Tipo</th><th style="text-align:center">Capacidad</th><th style="text-align:center">Registros</th><th style="text-align:center">Reg. habilitado</th><th style="text-align:center">Acciones</th></tr></thead>
+    <thead><tr><th style="width:60px;text-align:center">Habilitado</th><th style="text-align:center">Título</th><th style="text-align:center">Fecha</th><th style="text-align:center">Tipo</th><th style="text-align:center">Capacidad</th><th style="text-align:center">Registros</th><th style="text-align:center">Reg. habilitado</th><th style="text-align:center">Acciones</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
