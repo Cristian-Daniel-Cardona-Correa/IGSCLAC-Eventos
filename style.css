@@ -955,6 +955,19 @@ textarea.error {
     background-color: #fff5f5;
 }
 
+.char-counter {
+    font-size: 10px;
+    color: #666;
+    text-align: right;
+    margin-top: 4px;
+    font-family: monospace;
+}
+
+.char-counter.warning {
+    color: #e67e22;
+    font-weight: bold;
+}
+
 /* ===================== EVENT DETAIL ===================== */
 .detail-flyer {
     width: 100%;

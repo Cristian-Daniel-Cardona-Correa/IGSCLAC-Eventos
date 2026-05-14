@@ -394,21 +394,6 @@ function buildHero() {
   const dots = $('#hero-dots'); dots.innerHTML = '';
   slides.forEach((_, i) => { const s = document.createElement('span'); s.className = i === 0 ? 'active' : ''; s.onclick = () => goSlide(i); dots.appendChild(s); });
 
-  // Botón de editar para admin
-  const heroEditBtn = document.getElementById('hero-edit-btn');
-  if (heroEditBtn) heroEditBtn.remove();
-  if (state.role === 'admin') {
-    const btnEdit = document.createElement('button');
-    btnEdit.id = 'hero-edit-btn';
-    btnEdit.className = 'btn';
-    btnEdit.innerHTML = '<i class="fa-solid fa-edit"></i>';
-    btnEdit.title = 'Editar hero slider';
-    btnEdit.onclick = () => abrirEditorHeroSlides();
-    btnEdit.style.cssText = 'position:absolute;top:20px;right:20px;z-index:100;background:rgba(255,255,255,0.9);color:var(--primary);border:none;cursor:pointer;padding:10px 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;width:44px;height:44px;';
-    hero.style.position = 'relative';
-    hero.appendChild(btnEdit);
-  }
-
   // Swipe para móviles
   const heroEl = $('#hero');
   if (heroEl && !heroEl.hasAttribute('data-swipe-bound')) {
@@ -441,6 +426,28 @@ function goSlide(i) {
   document.querySelectorAll('.slide').forEach((n, k) => n.classList.toggle('active', k === i));
   document.querySelectorAll('#hero-dots span').forEach((n, k) => n.classList.toggle('active', k === i));
   resetHeroInterval();
+}
+
+function updateHeroEditButton() {
+  const hero = $('#hero');
+  if (!hero) return;
+  let existingBtn = document.getElementById('hero-edit-btn');
+
+  if (state.role === 'admin') {
+    if (!existingBtn) {
+      const btnEdit = document.createElement('button');
+      btnEdit.id = 'hero-edit-btn';
+      btnEdit.className = 'btn';
+      btnEdit.innerHTML = '<i class="fa-solid fa-edit"></i>';
+      btnEdit.title = 'Editar hero slider';
+      btnEdit.onclick = () => abrirEditorHeroSlides();
+      btnEdit.style.cssText = 'position:absolute;top:20px;right:20px;z-index:100;background:rgba(255,255,255,0.9);color:var(--primary);border:none;cursor:pointer;padding:10px 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;width:44px;height:44px;';
+      hero.style.position = 'relative';
+      hero.appendChild(btnEdit);
+    }
+  } else {
+    if (existingBtn) existingBtn.remove();
+  }
 }
 
 resetHeroInterval();
@@ -498,6 +505,7 @@ function applyRole() {
 
   // Mostrar u ocultar enlace "Panel Admin" en el menú
   $('#nav-admin').style.display = state.role === 'admin' ? 'block' : 'none';
+  updateHeroEditButton();
 }
 
 // ---------- NAVEGACIÓN ----------
@@ -1269,6 +1277,68 @@ async function downloadFullReportPDF(evento, registros) {
 }
 
 // ---------- HERO SLIDER (ADMIN) ----------
+
+function generarHTMLSlide(slide, index, mostrarReqAccion) {
+  const tituloLength = slide.titulo ? slide.titulo.length : 0;
+  const descLength = slide.descripcion ? slide.descripcion.length : 0;
+  const botonLength = slide.textoBoton ? slide.textoBoton.length : 0;
+
+  return `
+      <div id="slide-container-${index}" class="slide-container" data-index="${index}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+          <h3 style="margin:0;color:var(--primary)">Slide ${index + 1}</h3>
+          <button onclick="eliminarSlideHero(${index})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
+            <i class="fa-solid fa-trash"></i> Eliminar
+          </button>
+        </div>
+        <div class="form-group">
+          <label>Título <span class="req">*</span> (máx 60)</label>
+          <input type="text" class="slide-titulo-${index}" value="${esc(slide.titulo)}" maxlength="60" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+          <div class="char-counter" id="titulo-counter-${index}">${tituloLength}/60</div>
+        </div>
+        <div class="form-group">
+          <label>Descripción (máx 190):</label>
+          <textarea class="slide-descripcion-${index}" maxlength="190" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(slide.descripcion)}</textarea>
+          <div class="char-counter" id="desc-counter-${index}">${descLength}/190</div>
+        </div>
+        <div class="form-group">
+          <label>Imagen: <span class="req">*</span></label>
+          <div style="display:flex; gap:8px;">
+            <input type="url" class="slide-imagen-${index}" placeholder="https://..." value="${esc(slide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${index})" title="Subir imagen desde WordPress">
+              <i class="fa-solid fa-upload"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Texto del botón (máx 30):</label>
+          <input type="text" class="slide-boton-${index}" value="${esc(slide.textoBoton)}" maxlength="30" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+          <div class="char-counter" id="boton-counter-${index}">${botonLength}/30</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label class="checkbox-row">
+            <input type="checkbox" class="slide-overlay-${index}" ${slide.overlayActivo ? 'checked' : ''}>
+            Activar difuminado verde (overlay)
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Tipo de acción:</label>
+          <select class="slide-tipo-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            <option value="navegacion" ${slide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
+            <option value="evento" ${slide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
+            <option value="evento_pasado" ${slide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Acción: <span class="req-accion-${index}" style="color:#c0392b; display:${mostrarReqAccion ? 'inline' : 'none'};">*</span></label>
+          <div class="slide-accion-container-${index}">
+            ${renderAccionInput(index, slide, cachedAllEvents)}
+          </div>
+        </div>
+      </div>
+    `;
+}
+
 async function guardarHeroSlides(slides) {
   try {
     const response = await fetchAPI('/hero-slides', {
@@ -1351,63 +1421,13 @@ async function renderHeroSliderEditor() {
   const slidesEditor = document.getElementById('hero-slides-editor');
   if (slidesEditor) slidesEditor.remove();
 
-  const todosEventos = cachedAllEvents; // Usar eventos ya cargados
+  const todosEventos = cachedAllEvents;
 
   let html = '<div id="hero-slides-editor" style="display:flex;flex-direction:column;gap:20px;">';
 
   workingSlides.forEach((slide, i) => {
     const mostrarReqAccion = slide.textoBoton && slide.textoBoton.trim() !== '';
-    html += `
-      <div id="slide-container-${i}" class="slide-container" data-index="${i}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-          <h3 style="margin:0;color:var(--primary)">Slide ${i + 1}</h3>
-          <button onclick="eliminarSlideHero(${i})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
-            <i class="fa-solid fa-trash"></i> Eliminar
-          </button>
-        </div>
-        <div class="form-group">
-          <label>Título <span class="req">*</span></label>
-          <input type="text" class="slide-titulo-${i}" value="${esc(slide.titulo)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-        </div>
-        <div class="form-group">
-          <label>Descripción:</label>
-          <textarea class="slide-descripcion-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(slide.descripcion)}</textarea>
-        </div>
-        <div class="form-group">
-          <label>Imagen: <span class="req">*</span></label>
-          <div style="display:flex; gap:8px;">
-            <input type="url" class="slide-imagen-${i}" placeholder="https://..." value="${esc(slide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${i})" title="Subir imagen desde WordPress">
-              <i class="fa-solid fa-upload"></i>
-            </button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Texto del botón:</label>
-          <input type="text" class="slide-boton-${i}" value="${esc(slide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-        </div>
-        <div class="form-group" style="margin-bottom: 20px;">
-          <label class="checkbox-row">
-            <input type="checkbox" class="slide-overlay-${i}" ${slide.overlayActivo ? 'checked' : ''}>
-            Activar difuminado verde (overlay)
-          </label>
-        </div>
-        <div class="form-group">
-          <label>Tipo de acción:</label>
-          <select class="slide-tipo-${i}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-            <option value="navegacion" ${slide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
-            <option value="evento" ${slide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
-            <option value="evento_pasado" ${slide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Acción: <span class="req-accion-${i}" style="color:#c0392b; display:${mostrarReqAccion ? 'inline' : 'none'};">*</span></label>
-          <div class="slide-accion-container-${i}">
-            ${renderAccionInput(i, slide, todosEventos)}
-          </div>
-        </div>
-      </div>
-    `;
+    html += generarHTMLSlide(slide, i, mostrarReqAccion);
   });
 
   html += `
@@ -1417,6 +1437,47 @@ async function renderHeroSliderEditor() {
   </div>`;
 
   content.innerHTML = html;
+
+  // Agregar event listeners para actualizar contadores
+  for (let i = 0; i < workingSlides.length; i++) {
+    const tituloInput = document.querySelector(`.slide-titulo-${i}`);
+    const descInput = document.querySelector(`.slide-descripcion-${i}`);
+    const botonInput = document.querySelector(`.slide-boton-${i}`);
+    const tituloCounter = document.getElementById(`titulo-counter-${i}`);
+    const descCounter = document.getElementById(`desc-counter-${i}`);
+    const botonCounter = document.getElementById(`boton-counter-${i}`);
+
+    if (tituloInput && tituloCounter) {
+      const updateTituloCounter = () => {
+        const len = tituloInput.value.length;
+        tituloCounter.textContent = `${len}/60`;
+        if (len >= 55) tituloCounter.classList.add('warning');
+        else tituloCounter.classList.remove('warning');
+      };
+      tituloInput.addEventListener('input', updateTituloCounter);
+      updateTituloCounter();
+    }
+    if (descInput && descCounter) {
+      const updateDescCounter = () => {
+        const len = descInput.value.length;
+        descCounter.textContent = `${len}/190`;
+        if (len >= 160) descCounter.classList.add('warning');
+        else descCounter.classList.remove('warning');
+      };
+      descInput.addEventListener('input', updateDescCounter);
+      updateDescCounter();
+    }
+    if (botonInput && botonCounter) {
+      const updateBotonCounter = () => {
+        const len = botonInput.value.length;
+        botonCounter.textContent = `${len}/30`;
+        if (len >= 28) botonCounter.classList.add('warning');
+        else botonCounter.classList.remove('warning');
+      };
+      botonInput.addEventListener('input', updateBotonCounter);
+      updateBotonCounter();
+    }
+  }
 
   renumberSlides();
   for (let i = 0; i < workingSlides.length; i++) {
@@ -1529,7 +1590,6 @@ function eliminarSlideHero(index) {
 }
 
 async function agregarSlideHero() {
-  // Sincronizar valores actuales antes de agregar
   syncWorkingSlidesFromDOM();
 
   const nuevoSlide = {
@@ -1544,72 +1604,54 @@ async function agregarSlideHero() {
   const nuevoIndex = workingSlides.length;
   workingSlides.push(nuevoSlide);
 
-  // Generar HTML con marcadores de posición
-  const todosEventos = cachedAllEvents;
   const mostrarReqAccion = nuevoSlide.textoBoton && nuevoSlide.textoBoton.trim() !== '';
-  const nuevoSlideHtml = `
-    <div id="slide-container-${nuevoIndex}" class="slide-container" data-index="${nuevoIndex}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9; margin-top:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-        <h3 style="margin:0;color:var(--primary)">Slide ${nuevoIndex + 1}</h3>
-        <button onclick="eliminarSlideHero(${nuevoIndex})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
-          <i class="fa-solid fa-trash"></i> Eliminar
-        </button>
-      </div>
-      <div class="form-group">
-        <label>Título <span class="req">*</span></label>
-        <input type="text" class="slide-titulo-${nuevoIndex}" value="${esc(nuevoSlide.titulo)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-      </div>
-      <div class="form-group">
-        <label>Descripción:</label>
-        <textarea class="slide-descripcion-${nuevoIndex}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;min-height:80px;">${esc(nuevoSlide.descripcion)}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Imagen: <span class="req">*</span></label>
-        <div style="display:flex; gap:8px;">
-          <input type="url" class="slide-imagen-${nuevoIndex}" placeholder="https://..." value="${esc(nuevoSlide.imagen)}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
-          <button type="button" class="btn btn-sm btn-secondary" onclick="uploadHeroSlideImage(this, ${nuevoIndex})" title="Subir imagen desde WordPress">
-            <i class="fa-solid fa-upload"></i>
-          </button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Texto del botón:</label>
-        <input type="text" class="slide-boton-${nuevoIndex}" value="${esc(nuevoSlide.textoBoton)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-      </div>
-      <div class="form-group" style="margin-bottom: 20px;">
-        <label class="checkbox-row">
-          <input type="checkbox" class="slide-overlay-${nuevoIndex}" ${nuevoSlide.overlayActivo ? 'checked' : ''}>
-          Activar difuminado verde (overlay)
-        </label>
-      </div>
-      <div class="form-group">
-        <label>Tipo de acción:</label>
-        <select class="slide-tipo-${nuevoIndex}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
-          <option value="navegacion" ${nuevoSlide.tipoAccion === 'navegacion' ? 'selected' : ''}>Navegación</option>
-          <option value="evento" ${nuevoSlide.tipoAccion === 'evento' ? 'selected' : ''}>Ir a Evento</option>
-          <option value="evento_pasado" ${nuevoSlide.tipoAccion === 'evento_pasado' ? 'selected' : ''}>Ir a Evento Pasado</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Acción: <span class="req-accion-${nuevoIndex}" style="color:#c0392b; display:${mostrarReqAccion ? 'inline' : 'none'};">*</span></label>
-        <div class="slide-accion-container-${nuevoIndex}">
-          ${renderAccionInput(nuevoIndex, nuevoSlide, todosEventos)}
-        </div>
-      </div>
-    </div>
-  `;
+  const nuevoSlideHtml = generarHTMLSlide(nuevoSlide, nuevoIndex, mostrarReqAccion);
 
   const editorContainer = document.getElementById('hero-slides-editor');
   const addButton = document.getElementById('agregar-slide-btn');
   editorContainer.insertBefore(createElementFromHTML(nuevoSlideHtml), addButton);
 
-  // Renumerar todos los slides
+  // Configurar contadores y eventos
+  const tituloInput = document.querySelector(`.slide-titulo-${nuevoIndex}`);
+  const descInput = document.querySelector(`.slide-descripcion-${nuevoIndex}`);
+  const botonInput = document.querySelector(`.slide-boton-${nuevoIndex}`);
+  const tituloCounter = document.getElementById(`titulo-counter-${nuevoIndex}`);
+  const descCounter = document.getElementById(`desc-counter-${nuevoIndex}`);
+  const botonCounter = document.getElementById(`boton-counter-${nuevoIndex}`);
+
+  if (tituloInput && tituloCounter) {
+    const updateTituloCounter = () => {
+      const len = tituloInput.value.length;
+      tituloCounter.textContent = `${len}/60`;
+      if (len >= 55) tituloCounter.classList.add('warning');
+      else tituloCounter.classList.remove('warning');
+    };
+    tituloInput.addEventListener('input', updateTituloCounter);
+    updateTituloCounter();
+  }
+  if (descInput && descCounter) {
+    const updateDescCounter = () => {
+      const len = descInput.value.length;
+      descCounter.textContent = `${len}/190`;
+      if (len >= 160) descCounter.classList.add('warning');
+      else descCounter.classList.remove('warning');
+    };
+    descInput.addEventListener('input', updateDescCounter);
+    updateDescCounter();
+  }
+  if (botonInput && botonCounter) {
+    const updateBotonCounter = () => {
+      const len = botonInput.value.length;
+      botonCounter.textContent = `${len}/30`;
+      if (len >= 28) botonCounter.classList.add('warning');
+      else botonCounter.classList.remove('warning');
+    };
+    botonInput.addEventListener('input', updateBotonCounter);
+    updateBotonCounter();
+  }
+
   renumberSlides();
-
-  // Sincronizar workingSlides con el DOM después de renumerar
   syncWorkingSlidesFromDOM();
-
-  // Reasignar event listeners a todos los slides
   for (let i = 0; i < workingSlides.length; i++) {
     attachEventListenersToSlide(i);
   }
@@ -1683,6 +1725,17 @@ async function guardarHeroSlidesCambios() {
     if (!titulo) {
       showFieldError(tituloInput, 'El título del slide es obligatorio.');
       hayErrores = true;
+    } else if (titulo.length > 60) {
+      showFieldError(tituloInput, `El título no puede exceder 60 caracteres (actualmente ${titulo.length}).`);
+      hayErrores = true;
+    }
+
+    // --- Validar descripción ---
+    const descInput = document.querySelector(`.slide-descripcion-${i}`);
+    const descripcion = descInput?.value || '';
+    if (descripcion.length > 190) {
+      showFieldError(descInput, `La descripción no puede exceder 190 caracteres (actualmente ${descripcion.length}).`);
+      hayErrores = true;
     }
 
     // --- Validar imagen ---
@@ -1693,10 +1746,15 @@ async function guardarHeroSlidesCambios() {
       hayErrores = true;
     }
 
-    // --- Validar acción SOLO si el texto del botón no está vacío ---
+    // --- Validar texto del botón ---
     const botonInput = document.querySelector(`.slide-boton-${i}`);
     const textoBoton = botonInput?.value?.trim() || '';
+    if (textoBoton.length > 30) {
+      showFieldError(botonInput, `El texto del botón no puede exceder 30 caracteres (actualmente ${textoBoton.length}).`);
+      hayErrores = true;
+    }
 
+    // --- Validar acción SOLO si el texto del botón no está vacío ---
     if (textoBoton !== '') {
       const tipoAccion = document.querySelector(`.slide-tipo-${i}`)?.value || 'navegacion';
       if (tipoAccion === 'evento' || tipoAccion === 'evento_pasado') {
@@ -1748,9 +1806,9 @@ async function guardarHeroSlidesCambios() {
   await guardarHeroSlides(slidesEditados);
 
   // 6. Actualizar las variables globales con los nuevos datos
-  slides = slidesEditados;               // sincronizar con la copia principal
-  originalSlides = JSON.parse(JSON.stringify(slidesEditados)); // nueva referencia original
-  workingSlides = [];                    // liberar memoria
+  slides = slidesEditados;
+  originalSlides = JSON.parse(JSON.stringify(slidesEditados));
+  workingSlides = [];
 
   editorModal.remove();
 }
