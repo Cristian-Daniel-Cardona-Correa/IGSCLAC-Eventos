@@ -1489,15 +1489,30 @@ footer {
     }
 
     .hero {
-        height: 340px
+        height: 380px
     }
 
     .hero-dots {
         display: none;
     }
 
+    .slide-content {
+        max-width: 100%;
+        padding: 0 20px;
+    }
+
     .slide-content h1 {
-        font-size: 26px
+        font-size: 20px;
+        line-height: 1.2;
+        margin-bottom: 10px;
+    }
+
+    .slide-cta {
+        font-size: 13px;
+        padding: 10px 20px;
+        white-space: normal;
+        display: inline-block;
+        max-width: 90%;
     }
 
     .form-grid {
@@ -1573,6 +1588,23 @@ footer {
     #research-table-container table {
         min-width: 580px;
         width: max-content;
+    }
+
+      /* Contenedor de los botones de filtro (académicos e investigación) */
+    #content div[style*="display:flex; gap:8px; flex-wrap:wrap"] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* Cada botón de filtro */
+    #content div[style*="display:flex; gap:8px; flex-wrap:wrap"]>.btn {
+        flex: 0 0 calc(50% - 4px);
+        justify-content: center;
+        text-align: center;
+        white-space: nowrap;
+        font-size: 12px;
+        padding: 8px 6px;
     }
 
     .action-buttons {
