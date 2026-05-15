@@ -1998,11 +1998,36 @@ async function openRegister(id, tipoKey) {
     <p style="margin-bottom:14px;color:var(--text-soft)">Completa tus datos para registrarte. Cupos disponibles: <strong>${e.capacidad - regs.length}</strong> de ${e.capacidad}.</p>
     <form id="reg-form" novalidate>
       <div class="form-grid">
-        <div class="form-group"><label>Nombres <span class="req">*</span></label><input name="nombres" required></div>
-        <div class="form-group"><label>Apellidos <span class="req">*</span></label><input name="apellidos" required></div>
-        <div class="form-group"><label>Correo electrónico <span class="req">*</span></label><input type="email" name="email" required></div>
-        <div class="form-group"><label>Tipo de identificación <span class="req">*</span></label><select name="tipoId" required><option value="CC">CC - Cédula de Ciudadanía</option><option value="TI">TI - Tarjeta de Identidad</option><option value="CE">CE - Cédula de Extranjería</option><option value="PA">PA - Pasaporte</option><option value="RC">RC - Registro Civil</option></select></div>
-        <div class="form-group"><label>Identificación <span class="req">*</span></label><input name="identificacion" required></div>
+        <div class="form-group">
+          <label>Nombres <span class="req">*</span></label>
+          <input name="nombres" required maxlength="50">
+          <div class="char-counter" id="counter-nombres">0/50</div>
+        </div>
+        <div class="form-group">
+          <label>Apellidos <span class="req">*</span></label>
+          <input name="apellidos" required maxlength="50">
+          <div class="char-counter" id="counter-apellidos">0/50</div>
+        </div>
+        <div class="form-group">
+          <label>Correo electrónico <span class="req">*</span></label>
+          <input type="email" name="email" required maxlength="100">
+          <div class="char-counter" id="counter-email">0/100</div>
+        </div>
+        <div class="form-group">
+          <label>Tipo de identificación <span class="req">*</span></label>
+          <select name="tipoId" required>
+            <option value="CC">CC - Cédula de Ciudadanía</option>
+            <option value="TI">TI - Tarjeta de Identidad</option>
+            <option value="CE">CE - Cédula de Extranjería</option>
+            <option value="PA">PA - Pasaporte</option>
+            <option value="RC">RC - Registro Civil</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Identificación <span class="req">*</span></label>
+          <input name="identificacion" required maxlength="10">
+          <div class="char-counter" id="counter-identificacion">0/10</div>
+        </div>
         <div class="form-group">
           <label>Cargo <span class="req">*</span></label>
           <select name="cargo" id="cargoSelect" required>
@@ -2018,9 +2043,14 @@ async function openRegister(id, tipoKey) {
             <option value="Vicerrector">Vicerrector</option>
             <option value="Otro">Otro</option>
           </select>
-          <input type="text" name="cargoOtro" id="cargoOtro" placeholder="Especificar cargo" style="display:none; margin-top:8px;">
+          <input type="text" name="cargoOtro" id="cargoOtro" placeholder="Especificar cargo" maxlength="100" style="display:none; margin-top:8px;">
+          <div class="char-counter" id="counter-cargoOtro" style="display:none;">0/100</div>
         </div>
-        <div class="form-group full"><label>Institución <span class="req">*</span></label><input name="institucion" required></div>
+        <div class="form-group full">
+          <label>Institución <span class="req">*</span></label>
+          <input name="institucion" required maxlength="200">
+          <div class="char-counter" id="counter-institucion">0/200</div>
+        </div>
       </div>
     </form>
   `;
@@ -2029,14 +2059,58 @@ async function openRegister(id, tipoKey) {
     <button class="btn" onclick="validateAndSubmitRegister('${id}','${tipoKey}')"><i class="fa-solid fa-check"></i> Confirmar registro</button>
   `;
 
+  // Una vez insertado el HTML, añadimos los contadores y listeners
+  const nombresInput = document.querySelector('input[name="nombres"]');
+  const apellidosInput = document.querySelector('input[name="apellidos"]');
+  const emailInput = document.querySelector('input[name="email"]');
+  const identificacionInput = document.querySelector('input[name="identificacion"]');
+  const institucionInput = document.querySelector('input[name="institucion"]');
   const cargoSelect = document.getElementById('cargoSelect');
   const cargoOtro = document.getElementById('cargoOtro');
+  const counterCargoOtro = document.getElementById('counter-cargoOtro');
+
+  function updateCounter(input, counterId, max) {
+    const counter = document.getElementById(counterId);
+    if (counter) {
+      const len = input.value.length;
+      counter.textContent = `${len}/${max}`;
+      if (len >= max - 5) counter.classList.add('warning');
+      else counter.classList.remove('warning');
+    }
+  }
+
+  if (nombresInput) {
+    nombresInput.addEventListener('input', () => updateCounter(nombresInput, 'counter-nombres', 50));
+    updateCounter(nombresInput, 'counter-nombres', 50);
+  }
+  if (apellidosInput) {
+    apellidosInput.addEventListener('input', () => updateCounter(apellidosInput, 'counter-apellidos', 50));
+    updateCounter(apellidosInput, 'counter-apellidos', 50);
+  }
+  if (emailInput) {
+    emailInput.addEventListener('input', () => updateCounter(emailInput, 'counter-email', 100));
+    updateCounter(emailInput, 'counter-email', 100);
+  }
+  if (identificacionInput) {
+    identificacionInput.addEventListener('input', () => updateCounter(identificacionInput, 'counter-identificacion', 10));
+    updateCounter(identificacionInput, 'counter-identificacion', 10);
+  }
+  if (institucionInput) {
+    institucionInput.addEventListener('input', () => updateCounter(institucionInput, 'counter-institucion', 200));
+    updateCounter(institucionInput, 'counter-institucion', 200);
+  }
+
   function toggleCargoOtro() {
     if (cargoSelect.value === 'Otro') {
       cargoOtro.style.display = 'block';
+      counterCargoOtro.style.display = 'block';
       cargoOtro.required = true;
+      // Activar contador para cargoOtro
+      cargoOtro.addEventListener('input', () => updateCounter(cargoOtro, 'counter-cargoOtro', 100));
+      updateCounter(cargoOtro, 'counter-cargoOtro', 100);
     } else {
       cargoOtro.style.display = 'none';
+      counterCargoOtro.style.display = 'none';
       cargoOtro.required = false;
       cargoOtro.value = '';
     }
@@ -2065,16 +2139,41 @@ async function validateAndSubmitRegister(eventoId, tipoKey) {
 
   let isValid = true;
 
-  if (!nombres) { showFieldError(form.nombres, 'Los nombres son obligatorios.'); isValid = false; }
-  if (!apellidos) { showFieldError(form.apellidos, 'Los apellidos son obligatorios.'); isValid = false; }
+  // Validaciones de campos obligatorios y longitud
+  if (!nombres) {
+    showFieldError(form.nombres, 'Los nombres son obligatorios.');
+    isValid = false;
+  } else if (nombres.length > 50) {
+    showFieldError(form.nombres, 'Los nombres no pueden exceder 50 caracteres.');
+    isValid = false;
+  }
+
+  if (!apellidos) {
+    showFieldError(form.apellidos, 'Los apellidos son obligatorios.');
+    isValid = false;
+  } else if (apellidos.length > 50) {
+    showFieldError(form.apellidos, 'Los apellidos no pueden exceder 50 caracteres.');
+    isValid = false;
+  }
+
   if (!email) {
     showFieldError(form.email, 'El correo electrónico es obligatorio.');
     isValid = false;
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showFieldError(form.email, 'Ingresa un correo electrónico válido (ej: nombre@dominio.com).');
     isValid = false;
+  } else if (email.length > 100) {
+    showFieldError(form.email, 'El correo electrónico no puede exceder 100 caracteres.');
+    isValid = false;
   }
-  if (!identificacion) { showFieldError(form.identificacion, 'La identificación es obligatoria.'); isValid = false; }
+
+  if (!identificacion) {
+    showFieldError(form.identificacion, 'La identificación es obligatoria.');
+    isValid = false;
+  } else if (identificacion.length > 10) {
+    showFieldError(form.identificacion, 'La identificación no puede exceder 10 caracteres.');
+    isValid = false;
+  }
 
   if (!cargo) {
     if (cargoSelect.value === 'Otro') {
@@ -2083,9 +2182,18 @@ async function validateAndSubmitRegister(eventoId, tipoKey) {
       showFieldError(cargoSelect, 'Selecciona tu cargo.');
     }
     isValid = false;
+  } else if (cargoSelect.value === 'Otro' && cargo.length > 100) {
+    showFieldError(cargoOtro, 'El cargo no puede exceder 100 caracteres.');
+    isValid = false;
   }
 
-  if (!institucion) { showFieldError(form.institucion, 'La institución es obligatoria.'); isValid = false; }
+  if (!institucion) {
+    showFieldError(form.institucion, 'La institución es obligatoria.');
+    isValid = false;
+  } else if (institucion.length > 200) {
+    showFieldError(form.institucion, 'La institución no puede exceder 200 caracteres.');
+    isValid = false;
+  }
 
   if (!isValid) return;
 
@@ -2209,46 +2317,16 @@ function uploadHeroSlideImage(btn, slideIndex) {
 
   const frame = wp.media({
     title: 'Seleccionar imagen para el slide',
-    button: {
-      text: 'Usar esta imagen'
-    },
+    button: { text: 'Usar esta imagen' },
     multiple: false
   });
 
   window._igsclacMediaFrameHero = frame;
 
-  const userLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
-
-  if (typeof igsclacMediaNonce !== 'undefined') {
-    if (!userLoggedIn) {
-      frame.on('ready', function () {
-        const uploader = frame.uploader;
-        if (uploader && uploader.uploader && uploader.uploader.uploader) {
-          const plupload = uploader.uploader.uploader;
-          plupload.bind('BeforeUpload', function (up) {
-            up.settings.multipart_params = up.settings.multipart_params || {};
-            up.settings.multipart_params._wpnonce = igsclacMediaNonce.mediaForm;
-            up.settings.url = igsclacMediaNonce.ajaxurl + '?action=upload-attachment';
-          });
-        }
-      });
-    }
-
-    frame.on('open', function () {
-      if (!userLoggedIn && window._wpPluploadSettings) {
-        window._wpPluploadSettings.defaults = window._wpPluploadSettings.defaults || {};
-        window._wpPluploadSettings.defaults.multipart_params = window._wpPluploadSettings.defaults.multipart_params || {};
-        window._wpPluploadSettings.defaults.multipart_params._wpnonce = igsclacMediaNonce.mediaForm;
-      }
-    });
-  }
-
   frame.on('select', function () {
     const attachment = frame.state().get('selection').first().toJSON();
     const input = document.querySelector(`.slide-imagen-${slideIndex}`);
-    if (input) {
-      input.value = attachment.url;
-    }
+    if (input) input.value = attachment.url;
   });
 
   frame.open();
@@ -2262,119 +2340,16 @@ function uploadEventImage(btn) {
 
   const frame = wp.media({
     title: (typeof igsclacData !== 'undefined' && igsclacData.mediaTitle) || 'Seleccionar imagen',
-    button: {
-      text: (typeof igsclacData !== 'undefined' && igsclacData.mediaButton) || 'Usar esta imagen'
-    },
+    button: { text: (typeof igsclacData !== 'undefined' && igsclacData.mediaButton) || 'Usar esta imagen' },
     multiple: false
   });
 
   window._igsclacMediaFrame = frame;
 
-  // Determinar si hay un usuario logueado en WordPress.
-  // wp.api.models.User o el nonce de usuario logueado son indicadores fiables,
-  // pero la forma más directa es un flag que PHP nos pasa.
-  const userLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
-
-  if (typeof igsclacMediaNonce !== 'undefined') {
-
-    // Inyectar nonce en Plupload para subida — solo necesario si no hay sesión
-    if (!userLoggedIn) {
-      frame.on('ready', function () {
-        const uploader = frame.uploader;
-        if (uploader && uploader.uploader && uploader.uploader.uploader) {
-          const plupload = uploader.uploader.uploader;
-          plupload.bind('BeforeUpload', function (up) {
-            up.settings.multipart_params = up.settings.multipart_params || {};
-            up.settings.multipart_params._wpnonce = igsclacMediaNonce.mediaForm;
-            up.settings.url = igsclacMediaNonce.ajaxurl + '?action=upload-attachment';
-          });
-        }
-      });
-    }
-
-    frame.on('open', function () {
-      // Inyectar nonce en _wpPluploadSettings solo si no hay sesión
-      if (!userLoggedIn && window._wpPluploadSettings) {
-        window._wpPluploadSettings.defaults =
-          window._wpPluploadSettings.defaults || {};
-        window._wpPluploadSettings.defaults.multipart_params =
-          window._wpPluploadSettings.defaults.multipart_params || {};
-        window._wpPluploadSettings.defaults.multipart_params._wpnonce =
-          igsclacMediaNonce.mediaForm;
-      }
-
-      // Instalar el listener de delete SOLO si no hay sesión activa de WP.
-      // Con sesión, WP maneja el delete nativamente y no debemos interferir.
-      if (!userLoggedIn) {
-        setTimeout(() => {
-          const modalEl = document.querySelector('.media-modal');
-          if (!modalEl) return;
-
-          if (modalEl._igsclacDeleteHandler) {
-            modalEl.removeEventListener('click', modalEl._igsclacDeleteHandler, true);
-            modalEl._igsclacDeleteHandler = null;
-          }
-
-          modalEl._igsclacDeleteHandler = function (e) {
-            const deleteBtn = e.target.closest(
-              '.attachment-delete, .delete-attachment, [data-wp-delete-post], button.button-link-delete'
-            );
-            if (!deleteBtn) return;
-
-            e.preventDefault();
-            e.stopImmediatePropagation();
-
-            let attachmentId =
-              deleteBtn.dataset.id ||
-              deleteBtn.closest('[data-id]')?.dataset.id ||
-              deleteBtn.closest('.attachment')?.dataset.id ||
-              (() => {
-                try {
-                  return frame.state().get('selection')?.first()?.get('id');
-                } catch (err) { return null; }
-              })();
-
-            if (!attachmentId) return;
-
-            if (!confirm('¿Eliminar esta imagen permanentemente? Esta acción no se puede deshacer.')) return;
-
-            fetch(igsclacMediaNonce.ajaxurl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                action: 'igsclac-delete-attachment',
-                id: attachmentId,
-                nonce: igsclacMediaNonce.deleteNonce
-              })
-            })
-              .then(r => r.json())
-              .then(data => {
-                if (data.success) {
-                  const library = frame.state().get('library');
-                  if (library) {
-                    const model = library.get(parseInt(attachmentId));
-                    if (model) library.remove(model);
-                  }
-                  toast('Imagen eliminada correctamente');
-                } else {
-                  toast('Error al eliminar: ' + (data.data?.message || 'desconocido'), 'error');
-                }
-              })
-              .catch(() => toast('Error de red al eliminar', 'error'));
-          };
-
-          modalEl.addEventListener('click', modalEl._igsclacDeleteHandler, true);
-        }, 100);
-      }
-    });
-  }
-
   frame.on('select', function () {
     const attachment = frame.state().get('selection').first().toJSON();
     const input = btn.parentNode.querySelector('input[name="imagen"]');
-    if (input) {
-      input.value = attachment.url;
-    }
+    if (input) input.value = attachment.url;
   });
 
   frame.open();

@@ -47,6 +47,10 @@ function igsclac_assets() {
         'mediaTitle'  => 'Seleccionar o subir imagen del evento',
         'mediaButton' => 'Usar esta imagen'
     ));
+
+    wp_localize_script('eventos-js', 'igsclacMediaNonce', array(
+        'userLoggedIn' => is_user_logged_in(),
+    ));
 }
 add_action('wp_enqueue_scripts', 'igsclac_assets');
 
@@ -560,143 +564,7 @@ function igsclac_sembrar_datos_iniciales() {
 add_action('after_switch_theme', 'igsclac_sembrar_datos_iniciales');
 
 /* ============================================================
-   5. PERMITIR WP MEDIA UPLOADER SIN SESIÓN DE ADMIN
-============================================================ */
-
-add_filter('user_has_cap', function($allcaps, $caps, $args) {
-    $needed = ['upload_files', 'delete_posts', 'delete_others_posts', 'edit_posts'];
-    $intersect = array_intersect($needed, $caps);
-    if (empty($intersect)) {
-        return $allcaps;
-    }
-    if (is_admin() && !wp_doing_ajax()) {
-        return $allcaps;
-    }
-    $referrer = $_SERVER['HTTP_REFERER'] ?? '';
-    $site_url = home_url();
-    if (!empty($referrer)
-        && strpos($referrer, $site_url) === 0
-        && strpos($referrer, admin_url()) === false) {
-        $allcaps['upload_files']         = true;
-        $allcaps['read']                 = true;
-        $allcaps['edit_posts']           = true;
-        $allcaps['delete_posts']         = true;
-        $allcaps['delete_others_posts']  = true;
-        $allcaps['edit_others_posts']    = true;
-    }
-    return $allcaps;
-}, 10, 3);
-
-add_action('init', function() {
-    if (!wp_doing_ajax()) return;
-
-    $action = $_REQUEST['action'] ?? '';
-    $media_actions = [
-        'upload-attachment',
-        'query-attachments',
-        'get-attachment',
-        'send-attachment-to-editor',
-        'save-attachment',
-        'save-attachment-compat',
-        'set-post-thumbnail',
-        'delete-post',
-        'trash-post',
-        'untrash-post',
-        'igsclac-delete-attachment',
-    ];
-
-    if (!in_array($action, $media_actions, true)) return;
-    if (is_user_logged_in()) return;
-
-    if (!defined('WP_ADMIN')) define('WP_ADMIN', true);
-
-    require_once ABSPATH . 'wp-admin/includes/admin.php';
-    require_once ABSPATH . 'wp-admin/includes/ajax-actions.php';
-    require_once ABSPATH . 'wp-admin/includes/file.php';
-    require_once ABSPATH . 'wp-admin/includes/media.php';
-    require_once ABSPATH . 'wp-admin/includes/image.php';
-    require_once ABSPATH . 'wp-admin/includes/post.php';
-    require_once ABSPATH . 'wp-admin/includes/taxonomy.php';
-    require_once ABSPATH . 'wp-admin/includes/template.php';
-    require_once ABSPATH . 'wp-admin/includes/meta-boxes.php';
-}, 1);
-
-add_action('wp_enqueue_scripts', function() {
-    if (!wp_script_is('eventos-js', 'enqueued')) return;
-    wp_localize_script('eventos-js', 'igsclacMediaNonce', array(
-        'mediaForm'    => wp_create_nonce('media-form'),
-        'deleteNonce'  => wp_create_nonce('igsclac-delete-attachment'),
-        'ajaxurl'      => admin_url('admin-ajax.php'),
-        'userLoggedIn' => is_user_logged_in(), // true si hay sesion WP activa
-    ));
-}, 20);
-
-// Forzar nonce_user_logged_out a 0 para que los nonces anonimos sean validos
-add_filter('nonce_user_logged_out', function($uid, $action) {
-    $bypass = [
-        'media-form',
-        'save-attachment',
-        'save-attachment-compat',
-        'igsclac-delete-attachment',
-    ];
-    if (in_array($action, $bypass, true)) {
-        return 0;
-    }
-    return $uid;
-}, 10, 2);
-
-// Subir archivo
-add_action('wp_ajax_nopriv_upload-attachment', function() {
-    $nonce = $_REQUEST['_wpnonce'] ?? '';
-    if (!wp_verify_nonce($nonce, 'media-form')) {
-        wp_send_json_error(['message' => 'Nonce inválido'], 403);
-    }
-    wp_ajax_upload_attachment();
-}, 1);
-
-// Listar archivos existentes
-add_action('wp_ajax_nopriv_query-attachments', function() {
-    wp_ajax_query_attachments();
-}, 1);
-
-// Obtener datos de un archivo
-add_action('wp_ajax_nopriv_get-attachment', function() {
-    wp_ajax_get_attachment();
-}, 1);
-
-// Enviar al editor
-add_action('wp_ajax_nopriv_send-attachment-to-editor', function() {
-    wp_ajax_send_attachment_to_editor();
-}, 1);
-
-// Guardar datos de un archivo (titulo, alt, etc.)
-add_action('wp_ajax_nopriv_save-attachment', function() {
-    wp_ajax_save_attachment();
-}, 1);
-
-add_action('wp_ajax_nopriv_save-attachment-compat', function() {
-    wp_ajax_save_attachment_compat();
-}, 1);
-
-add_action('wp_ajax_nopriv_igsclac-delete-attachment', function() {
-    $nonce = $_REQUEST['nonce'] ?? '';
-    if (!wp_verify_nonce($nonce, 'igsclac-delete-attachment')) {
-        wp_send_json_error(['message' => 'Nonce inválido'], 403);
-    }
-    $id = intval($_REQUEST['id'] ?? 0);
-    if (!$id) {
-        wp_send_json_error(['message' => 'ID inválido'], 400);
-    }
-    $result = wp_delete_attachment($id, true);
-    if ($result) {
-        wp_send_json_success(['deleted' => $id]);
-    } else {
-        wp_send_json_error(['message' => 'No se pudo eliminar'], 500);
-    }
-}, 1);
-
-/* ============================================================
-   6. HERO SLIDER PERSONALIZABLE
+   5. HERO SLIDER PERSONALIZABLE
 ============================================================ */
 
 function igsclac_obtener_hero_slides_default() {
