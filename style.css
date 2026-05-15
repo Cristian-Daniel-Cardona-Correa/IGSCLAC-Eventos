@@ -101,7 +101,7 @@ img {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1320px;
     margin: 0 auto;
     padding: 0 20px
 }
@@ -846,6 +846,19 @@ input:checked+.toggle-slider:before {
 
 .toggle-slider:active:before {
     width: 24px
+}
+
+/* ===================== ADMIN TABLE COLUMN WIDTHS ===================== */
+#academic-table-container table th:nth-child(2),
+#research-table-container table th:nth-child(2) {
+    width: 25%;            /* Título ocupa casi la mitad */
+    min-width: 130px;      /* para que no se encoja demasiado */
+}
+
+#academic-table-container table th:nth-child(3),
+#research-table-container table th:nth-child(3) {
+    width: 14%;            /* Fecha con buen espacio */
+    min-width: 90px;
 }
 
 /* ===================== MODALS ===================== */
