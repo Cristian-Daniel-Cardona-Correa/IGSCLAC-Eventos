@@ -95,6 +95,31 @@ function sortRegistros(registros, sortBy) {
   return sorted;
 }
 
+function initSelect2(containerSelector = '.select2-evento') {
+  const modal = document.getElementById('hero-editor-modal');
+  const dropdownParent = modal ? modal.querySelector('div[style*="max-width"]') : document.body;
+
+  jQuery(containerSelector).each(function () {
+    if (jQuery(this).data('select2')) {
+      jQuery(this).select2('destroy');
+    }
+    jQuery(this).select2({
+      placeholder: 'Buscar evento...',
+      allowClear: true,
+      width: '100%',
+      dropdownParent: dropdownParent,
+      language: {
+        noResults: function () {
+          return "No se encontraron eventos";
+        },
+        searching: function () {
+          return "Buscando…";
+        }
+      }
+    });
+  });
+}
+
 // ---------- CLASIFICACIÓN DE EVENTOS ----------
 function isEventPast(evento) {
   if (!evento.fechaFin) return false;
@@ -1280,14 +1305,19 @@ function generarHTMLSlide(slide, index, mostrarReqAccion) {
   const tituloLength = slide.titulo ? slide.titulo.length : 0;
   const descLength = slide.descripcion ? slide.descripcion.length : 0;
   const botonLength = slide.textoBoton ? slide.textoBoton.length : 0;
+  const totalSlides = workingSlides.length;
 
   return `
-      <div id="slide-container-${index}" class="slide-container" data-index="${index}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9;">
+      <div id="slide-container-${index}" class="slide-container" data-index="${index}" style="border:1px solid #ddd;padding:15px;border-radius:4px;background:#f9f9f9; margin-bottom:15px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
           <h3 style="margin:0;color:var(--primary)">Slide ${index + 1}</h3>
-          <button onclick="eliminarSlideHero(${index})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
-            <i class="fa-solid fa-trash"></i> Eliminar
-          </button>
+          <div>
+            ${index > 0 ? `<button type="button" class="btn btn-secondary btn-sm" onclick="moverSlideHero(${index}, 'up')" style="margin-right:5px;" title="Mover arriba"><i class="fa-solid fa-arrow-up"></i></button>` : ''}
+            ${index < totalSlides - 1 ? `<button type="button" class="btn btn-secondary btn-sm" onclick="moverSlideHero(${index}, 'down')" style="margin-right:5px;" title="Mover abajo"><i class="fa-solid fa-arrow-down"></i></button>` : ''}
+            <button onclick="eliminarSlideHero(${index})" class="btn btn-secondary" style="padding:5px 10px;font-size:12px;">
+              <i class="fa-solid fa-trash"></i> Eliminar
+            </button>
+          </div>
         </div>
         <div class="form-group">
           <label>Título <span class="req">*</span> (máx 60)</label>
@@ -1482,6 +1512,8 @@ async function renderHeroSliderEditor() {
     attachEventListenersToSlide(i);
   }
 
+  initSelect2();
+
   // Asignar el evento click al botón de agregar
   document.getElementById('agregar-slide-btn').onclick = () => agregarSlideHero();
 
@@ -1534,7 +1566,7 @@ function renderAccionInput(index, slide, todosEventos = []) {
       optionsHtml += `<option value="${evt.id}" ${selected}>${esc(label)}</option>`;
     });
     return `
-      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      <select class="slide-accion-${index} select2-evento" style="width:100%;">
         ${optionsHtml}
       </select>
       <small style="color:#666;display:block;margin-top:5px;">Selecciona un evento activo para abrirlo al hacer clic en el botón.</small>
@@ -1548,14 +1580,14 @@ function renderAccionInput(index, slide, todosEventos = []) {
       optionsHtml += `<option value="${evt.id}" ${selected}>${esc(label)}</option>`;
     });
     return `
-      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      <select class="slide-accion-${index} select2-evento" style="width:100%;">
         ${optionsHtml}
       </select>
       <small style="color:#666;display:block;margin-top:5px;">Selecciona un evento pasado para mostrarlo como noticia.</small>
     `;
   } else {
     return `
-      <select class="slide-accion-${index}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      <select class="slide-accion-${index}" style="width:100%;">
         <option value="home" ${slide.accion === 'home' ? 'selected' : ''}>Inicio</option>
         <option value="academicos" ${slide.accion === 'academicos' ? 'selected' : ''}>Eventos Académicos</option>
         <option value="investigacion" ${slide.accion === 'investigacion' ? 'selected' : ''}>Eventos de Investigación</option>
@@ -1585,6 +1617,17 @@ function eliminarSlideHero(index) {
   for (let i = 0; i < workingSlides.length; i++) {
     attachEventListenersToSlide(i);
   }
+}
+
+function moverSlideHero(index, direccion) {
+  if ((direccion === 'up' && index === 0) || (direccion === 'down' && index === workingSlides.length - 1)) return;
+
+  syncWorkingSlidesFromDOM();
+
+  const nuevoIndex = direccion === 'up' ? index - 1 : index + 1;
+  [workingSlides[index], workingSlides[nuevoIndex]] = [workingSlides[nuevoIndex], workingSlides[index]];
+
+  renderHeroSliderEditor();
 }
 
 async function agregarSlideHero() {
@@ -1653,6 +1696,8 @@ async function agregarSlideHero() {
   for (let i = 0; i < workingSlides.length; i++) {
     attachEventListenersToSlide(i);
   }
+
+  initSelect2();
 }
 
 // Helper para convertir HTML string a nodo
@@ -1683,8 +1728,13 @@ function attachEventListenersToSlide(i) {
     const tipo = tipoSelect.value;
     const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || workingSlides[i]?.accion || '';
     container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, cachedAllEvents);
+
     const accionSelect = document.querySelector(`.slide-accion-${i}`);
     if (accionSelect && botonInput) accionSelect.disabled = botonInput.value.trim() === '';
+
+    if (container.querySelector('.select2-evento')) {
+      initSelect2('.select2-evento');
+    }
   });
 
   const asteriscoAccion = document.querySelector(`.req-accion-${i}`);

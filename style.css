@@ -402,6 +402,10 @@ textarea {
     display: none;
 }
 
+.slide-container .btn-sm {
+    margin: 0 2px;
+}
+
 .hero-dots {
     position: absolute;
     bottom: 20px;
@@ -424,6 +428,59 @@ textarea {
 .hero-dots span.active {
     background: #fff;
     transform: scale(1.2)
+}
+
+#hero-editor-modal .select2-container--default .select2-selection--single {
+    height: 42px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    background: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+}
+
+#hero-editor-modal .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 40px;
+    padding-left: 12px;
+    color: var(--text);
+}
+
+#hero-editor-modal .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px;
+}
+
+#hero-editor-modal .select2-container--default .select2-selection--single .select2-selection__clear {
+    margin-right: 20px;
+    font-size: 16px;
+}
+
+#hero-editor-modal .select2-dropdown {
+    z-index: 99999 !important;
+    /* encima de todo */
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    font-family: 'Poppins', sans-serif;
+}
+
+#hero-editor-modal .select2-search--dropdown .select2-search__field {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+}
+
+#hero-editor-modal .select2-results__option {
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+#hero-editor-modal .select2-results__option--highlighted {
+    background: var(--primary) !important;
+    color: #fff !important;
 }
 
 @keyframes fadeUp {

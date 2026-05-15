@@ -651,3 +651,22 @@ function igsclac_guardar_hero_slides($request) {
     update_option('igsclac_hero_slides', $slides);
     return rest_ensure_response(array('success' => true, 'slides' => $slides));
 }
+
+function igsclac_enqueue_select2() {
+    if (!is_admin()) {
+        wp_enqueue_style(
+            'select2-css',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+            array(),
+            '4.1.0-rc.0'
+        );
+        wp_enqueue_script(
+            'select2-js',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+            array('jquery'), // jQuery ya está encolado como dependencia de eventos-js
+            '4.1.0-rc.0',
+            true
+        );
+    }
+}
+add_action('wp_enqueue_scripts', 'igsclac_enqueue_select2');
