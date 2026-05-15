@@ -137,14 +137,11 @@ add_action('wp_loaded', 'igsclac_migrar_habilitado');
 function igsclac_deshabilitar_eventos_antiguos() {
     global $wpdb;
     $tabla = $wpdb->prefix . 'igsclac_eventos';
-    $today = date('Y-m-d');
-    
-    // Actualizar eventos cuya fecha_fin sea menor que hoy y estén habilitados
+    // Ahora usamos la fecha y hora actual del servidor
     $wpdb->query(
-        $wpdb->prepare(
-            "UPDATE $tabla SET habilitado = 0 WHERE fecha_fin < %s AND habilitado = 1",
-            $today
-        )
+        "UPDATE $tabla SET habilitado = 0 
+         WHERE CONCAT(fecha_fin, ' ', hora_fin) < NOW() 
+         AND habilitado = 1"
     );
 }
 add_action('wp_loaded', 'igsclac_deshabilitar_eventos_antiguos');
@@ -390,9 +387,15 @@ function igsclac_toggle_evento($request) {
 
     // Validar: no se puede habilitar un evento antiguo
     if ($new === 1) {
-        $evento = $wpdb->get_row($wpdb->prepare("SELECT fecha_fin FROM $tabla WHERE id = %s", $id));
-        if ($evento && $evento->fecha_fin < date('Y-m-d')) {
-            return new WP_Error('evento_antiguo', 'No se puede habilitar un evento pasado', array('status' => 400));
+        $evento = $wpdb->get_row($wpdb->prepare(
+            "SELECT fecha_fin, hora_fin FROM $tabla WHERE id = %s",
+            $id
+        ));
+        if ($evento) {
+            $end_datetime = $evento->fecha_fin . ' ' . $evento->hora_fin;
+            if ($end_datetime < current_time('mysql')) {
+                return new WP_Error('evento_antiguo', 'No se puede habilitar un evento pasado', array('status' => 400));
+            }
         }
     }
 

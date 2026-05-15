@@ -96,25 +96,35 @@ function sortRegistros(registros, sortBy) {
 }
 
 // ---------- CLASIFICACIÓN DE EVENTOS ----------
-function isEventPast(fechaFin) {
-  if (!fechaFin) return false;
-  const today = new Date(new Date().toDateString());
-  const eventEnd = new Date(fechaFin + 'T00:00:00');
-  return eventEnd < today;
+function isEventPast(evento) {
+  if (!evento.fechaFin) return false;
+  
+  let horaFin = evento.horaFin || '00:00';
+  const parts = horaFin.split(':');
+  const hour = parts[0] || '00';
+  const minute = parts[1] || '00';
+  
+  const endDateTime = new Date(`${evento.fechaFin}T${hour}:${minute}:00`);
+  
+  if (isNaN(endDateTime.getTime())) {
+    console.warn('Fecha de fin inválida:', evento.fechaFin, evento.horaFin);
+    return true;
+  }
+  return endDateTime < new Date();
 }
 
-function isEventDraft(habilitado, fechaFin) {
-  if (habilitado !== false) return false; // No es borrador si está habilitado
-  return !isEventPast(fechaFin); // Es borrador si está deshabilitado y NO es pasado
+function isEventDraft(evento) {
+  // Borrador: deshabilitado y NO es pasado
+  return evento.habilitado === false && !isEventPast(evento);
 }
 
 function filterEventsByStatus(events, status) {
   if (status === 'active') {
-    return events.filter(e => e.habilitado !== false && !isEventPast(e.fechaFin || e.fechaInicio));
+    return events.filter(e => e.habilitado !== false && !isEventPast(e));
   } else if (status === 'past') {
-    return events.filter(e => isEventPast(e.fechaFin || e.fechaInicio));
+    return events.filter(e => isEventPast(e));
   } else if (status === 'drafts') {
-    return events.filter(e => isEventDraft(e.habilitado, e.fechaFin || e.fechaInicio));
+    return events.filter(e => isEventDraft(e));
   }
   return events;
 }
@@ -769,7 +779,7 @@ async function cardHtml(e) {
         </div>
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="openEventDetail('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-eye"></i> Ver más</button>
-          ${e.registroHabilitado && state.role === 'user' && !isEventPast(e.fechaFin || e.fechaInicio) ? `<button class="btn btn-sm" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Lleno' : 'Registrarse'}</button>` : ''}
+          ${e.registroHabilitado && state.role === 'user' && !isEventPast(e) ? `<button class="btn btn-sm" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Lleno' : 'Registrarse'}</button>` : ''}
           ${state.role === 'admin' ? `
             <button class="btn btn-sm" onclick="openEventForm('${e.tipo}','${e.id}')"><i class="fa-solid fa-pen"></i></button>
             <button class="btn btn-sm" style="background:#6c757d; color:#fff;" onclick="duplicateEvent('${e.id}','${isAcad ? 'acad' : 'inv'}')"><i class="fa-regular fa-copy"></i></button>
@@ -860,7 +870,7 @@ async function openEventDetail(id, tipoKey) {
                 <option value="lastname_desc">Apellido (Z → A)</option>
               </select>
               ` : ''}
-              ${isEventPast(e.fechaFin || e.fechaInicio) ? `
+              ${isEventPast(e) ? `
               <div style="position:relative; display:inline-block;">
                 <button id="report-dropdown-btn" class="btn btn-sm" style="background:#2d883b; color:#fff;"><i class="fa-solid fa-file-export"></i> Generar informe <i class="fa-solid fa-caret-down"></i></button>
                 <div id="report-dropdown" class="dropdown" style="display:none; position:absolute; right:0; top:100%; min-width:160px; z-index:400; background:#fff; box-shadow:var(--shadow); border-radius:6px;">
@@ -919,7 +929,7 @@ async function openEventDetail(id, tipoKey) {
   }
 
   $('#modal-footer').innerHTML = `
-        ${e.registroHabilitado && state.role === 'user' && !isEventPast(e.fechaFin || e.fechaInicio) ? `<button class="btn" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${tipoKey}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Cupo lleno' : 'Registrarse'}</button>` : ''}
+        ${e.registroHabilitado && state.role === 'user' && !isEventPast(e) ? `<button class="btn" ${lleno ? 'disabled style="opacity:.6;cursor:not-allowed"' : ''} onclick="openRegister('${e.id}','${tipoKey}')"><i class="fa-solid fa-user-plus"></i> ${lleno ? 'Cupo lleno' : 'Registrarse'}</button>` : ''}
         <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
     `;
   showModal();
@@ -1528,7 +1538,7 @@ async function renderHeroSliderEditor() {
 
 function renderAccionInput(index, slide, todosEventos = []) {
   if (slide.tipoAccion === 'evento') {
-    const eventosActivos = todosEventos.filter(e => !isEventPast(e.fechaFin || e.fechaInicio) && e.habilitado !== false);
+    const eventosActivos = todosEventos.filter(e => !isEventPast(e) && e.habilitado !== false);
     let optionsHtml = '<option value="">-- Selecciona un evento --</option>';
     eventosActivos.forEach(evt => {
       const selected = evt.id === slide.accion ? 'selected' : '';
@@ -1542,7 +1552,7 @@ function renderAccionInput(index, slide, todosEventos = []) {
       <small style="color:#666;display:block;margin-top:5px;">Selecciona un evento activo para abrirlo al hacer clic en el botón.</small>
     `;
   } else if (slide.tipoAccion === 'evento_pasado') {
-    const eventosPasados = todosEventos.filter(e => isEventPast(e.fechaFin || e.fechaInicio));
+    const eventosPasados = todosEventos.filter(e => isEventPast(e));
     let optionsHtml = '<option value="">-- Selecciona un evento --</option>';
     eventosPasados.forEach(evt => {
       const selected = evt.id === slide.accion ? 'selected' : '';
@@ -2569,7 +2579,7 @@ async function adminTable(list, tipoKey) {
   for (const e of list) {
     const regs = await cargarRegistros(e.id);
     const rCount = regs.length;
-    const isPast = isEventPast(e.fechaFin || e.fechaInicio);
+    const isPast = isEventPast(e);
     const isRegDisabled = !e.registroHabilitado;
     const totalAsistentes = rCount + (e.asistentes_manuales || 0);
     const canEditManual = isPast && isRegDisabled;
@@ -2742,7 +2752,7 @@ async function toggleEventVisibility(event, id, tipoKey) {
   if (!evento) { toast('Evento no encontrado', 'error'); event.target.checked = !newState; return; }
 
   // Validar: no se puede habilitar un evento antiguo
-  if (newState && isEventPast(evento.fechaFin || evento.fechaInicio)) {
+  if (newState && isEventPast(evento)) {
     toast('No se puede habilitar un evento pasado. Cambia la fecha a una mayor que hoy.', 'error');
     event.target.checked = !newState; // Revertir el estado del checkbox
     return;
@@ -2816,13 +2826,27 @@ async function renderUpcoming() {
   const acad = await cargarEventos('académico');
   const inv = await cargarEventos('investigación');
   const all = [...acad, ...inv];
-  const upcoming = all.filter(e => new Date(e.fechaInicio) >= new Date(new Date().toDateString()))
-    .sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio))
+  const now = new Date();
+
+  const upcoming = all
+    .filter(e => {
+      // Construir fecha y hora de inicio (YYYY-MM-DDTHH:MM:SS)
+      const startDateTime = new Date(`${e.fechaInicio}T${e.horaInicio || '00:00'}:00`);
+      return startDateTime >= now;
+    })
+    .sort((a, b) => {
+      const startA = new Date(`${a.fechaInicio}T${a.horaInicio || '00:00'}:00`);
+      const startB = new Date(`${b.fechaInicio}T${b.horaInicio || '00:00'}:00`);
+      return startA - startB;
+    })
     .slice(0, 5);
-  $('#widget-upcoming').innerHTML = upcoming.length ? upcoming.map(e => `
-    <li><a href="#" onclick="openEventDetail('${e.id}','${e.tipo === 'académico' ? 'acad' : 'inv'}');return false;">
-      <small>${fmtDate(e.fechaInicio)}</small>${esc(e.titulo)}
-    </a></li>`).join('') : '<li style="color:var(--text-soft)">Sin eventos próximos.</li>';
+
+  $('#widget-upcoming').innerHTML = upcoming.length
+    ? upcoming.map(e => `
+      <li><a href="#" onclick="openEventDetail('${e.id}','${e.tipo === 'académico' ? 'acad' : 'inv'}');return false;">
+        <small>${fmtDate(e.fechaInicio)}</small>${esc(e.titulo)}
+      </a></li>`).join('')
+    : '<li style="color:var(--text-soft)">Sin eventos próximos.</li>';
 }
 
 // ---------- MODAL ----------
