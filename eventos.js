@@ -619,9 +619,12 @@ async function renderHome(c) {
       <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
         <i class="fa-solid fa-calendar-check"></i> Pasados
       </button>
-      <button class="btn btn-secondary" onclick="toggleHomeSort()" style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;">
+      <button class="btn btn-secondary filter-sort-btn"
+              onclick="toggleHomeSort()"
+              style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;"
+              aria-label="Ordenar por fecha: ${state.sortHome === 'date_asc' ? 'cercanos primero' : 'lejanos primero'}">
         <i class="fa-solid ${state.sortHome === 'date_asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short'}"></i>
-        ${state.sortHome === 'date_asc' ? 'Cercanos' : 'Lejanos'}
+        <span class="sort-text">${state.sortHome === 'date_asc' ? 'Cercanos' : 'Lejanos'}</span>
       </button>
     </div>
   `;
@@ -692,9 +695,12 @@ async function renderEventList(c, tipo) {
         <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
           <i class="fa-solid fa-calendar-check"></i> Pasados
         </button>
-        <button class="btn btn-secondary" onclick="${isAcad ? 'toggleAcademicSort()' : 'toggleInvestigationSort()'}" style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;">
+        <button class="btn btn-secondary filter-sort-btn"
+                onclick="${isAcad ? 'toggleAcademicSort()' : 'toggleInvestigationSort()'}"
+                style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;"
+                aria-label="Ordenar por fecha: ${sort === 'date_asc' ? 'cercanos primero' : 'lejanos primero'}">
           <i class="fa-solid ${sort === 'date_asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short'}"></i>
-          ${sort === 'date_asc' ? 'Cercanos' : 'Lejanos'}
+          <span class="sort-text">${sort === 'date_asc' ? 'Cercanos' : 'Lejanos'}</span>
         </button>
       </div>
     `;

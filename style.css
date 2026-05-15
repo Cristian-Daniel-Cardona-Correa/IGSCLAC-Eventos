@@ -1589,6 +1589,14 @@ footer {
         min-width: 32px;
     }
 
+    .filter-sort-btn .sort-text {
+        display: none;
+    }
+
+    .filter-sort-btn {
+        padding: 6px 10px;
+    }
+
     .filter-row button {
         font-size: 12px;
         padding: 6px 10px;
