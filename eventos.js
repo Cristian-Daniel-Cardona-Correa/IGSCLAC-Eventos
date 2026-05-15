@@ -98,14 +98,14 @@ function sortRegistros(registros, sortBy) {
 // ---------- CLASIFICACIÓN DE EVENTOS ----------
 function isEventPast(evento) {
   if (!evento.fechaFin) return false;
-  
+
   let horaFin = evento.horaFin || '00:00';
   const parts = horaFin.split(':');
   const hour = parts[0] || '00';
   const minute = parts[1] || '00';
-  
+
   const endDateTime = new Date(`${evento.fechaFin}T${hour}:${minute}:00`);
-  
+
   if (isNaN(endDateTime.getTime())) {
     console.warn('Fecha de fin inválida:', evento.fechaFin, evento.horaFin);
     return true;
@@ -572,6 +572,21 @@ async function render() {
   await renderUpcoming();
 }
 
+function toggleHomeSort() {
+  const newSort = state.sortHome === 'date_asc' ? 'date_desc' : 'date_asc';
+  setHomeSort(newSort);
+}
+
+function toggleAcademicSort() {
+  const newSort = state.sortAcad === 'date_asc' ? 'date_desc' : 'date_asc';
+  setEventSort('acad', newSort);
+}
+
+function toggleInvestigationSort() {
+  const newSort = state.sortInv === 'date_asc' ? 'date_desc' : 'date_asc';
+  setEventSort('inv', newSort);
+}
+
 async function renderHome(c) {
   setBreadcrumbs([{ view: 'home', label: 'Inicio' }]);
 
@@ -579,17 +594,13 @@ async function renderHome(c) {
   const inv = await cargarEventos('investigación', true);
   let all = [...acad, ...inv];
 
-  // Filtrar por estado (activos, pasados)
   all = filterEventsByStatus(all, state.filterHome);
-
   if (state.search) {
     all = all.filter(e => e.titulo.toLowerCase().includes(state.search));
   }
 
-  // Aplicar orden según el filtro actual
   let sortOrder = state.sortHome;
   if (state.filterHome === 'past') {
-    // Para eventos pasados, invertimos el sentido: "más cercanos" = más recientes
     sortOrder = (sortOrder === 'date_asc') ? 'date_desc' : 'date_asc';
   }
   all = sortEvents(all, sortOrder);
@@ -599,22 +610,19 @@ async function renderHome(c) {
   const start = (state.pageHome - 1) * PER_PAGE;
   const paginatedEvents = all.slice(start, start + PER_PAGE);
 
-  const filterButtons = `
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <div style="display:flex; gap:8px;">
-        <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-          <i class="fa-solid fa-circle-check"></i> Activos
-        </button>
-        <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-          <i class="fa-solid fa-calendar-check"></i> Pasados
-        </button>
-      </div>
-      <div style="margin-left: auto;">
-        <select id="sort-select-home" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
-          <option value="date_asc" ${state.sortHome === 'date_asc' ? 'selected' : ''}>Más cercanos primero</option>
-          <option value="date_desc" ${state.sortHome === 'date_desc' ? 'selected' : ''}>Más lejanos primero</option>
-        </select>
-      </div>
+  // Contenedor flexible sin salto de línea (scroll horizontal si necesario)
+  const filterRow = `
+    <div style="display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin-bottom:16px;">
+      <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-circle-check"></i> Activos
+      </button>
+      <button class="btn ${state.filterHome === 'past' ? '' : 'btn-secondary'}" onclick="setHomeFilter('past')" style="${state.filterHome === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+        <i class="fa-solid fa-calendar-check"></i> Pasados
+      </button>
+      <button class="btn btn-secondary" onclick="toggleHomeSort()" style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;">
+        <i class="fa-solid ${state.sortHome === 'date_asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short'}"></i>
+        ${state.sortHome === 'date_asc' ? 'Cercanos' : 'Lejanos'}
+      </button>
     </div>
   `;
 
@@ -622,18 +630,10 @@ async function renderHome(c) {
     <div class="section-title"><h2><i class="fa-solid fa-star"></i> Bienvenidos al portal de eventos</h2></div>
     <p style="margin-bottom:24px;color:var(--text-soft)">Explora todos los eventos académicos y de investigación de IGSCLAC. Mantente al día con la agenda institucional y regístrate en los eventos disponibles.</p>
     <div class="section-title"><h2>Todos los eventos${state.search ? ` · resultados para "${esc(state.search)}"` : ''}</h2></div>
-    ${filterButtons}
+    ${filterRow}
     ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No se encontraron eventos.')}
     ${paginationHtml(state.pageHome, totalPages, 'home')}
   `;
-
-  // Asignar evento change al selector de orden
-  const sortSelect = document.getElementById('sort-select-home');
-  if (sortSelect) {
-    sortSelect.addEventListener('change', (e) => {
-      setHomeSort(e.target.value);
-    });
-  }
 }
 
 function setHomeFilter(filterValue) {
@@ -662,70 +662,52 @@ async function renderEventList(c, tipo) {
 
   try {
     let all = await cargarEventos(tipo, true);
-
-    // Filtrar por estado (activos, pasados, borradores)
     all = filterEventsByStatus(all, filter);
-
     if (state.search) {
       all = all.filter(e => e.titulo.toLowerCase().includes(state.search));
     }
 
-    // Aplicar orden según el filtro actual
     let sortOrder = sort;
     if (filter === 'past') {
-      // Para eventos pasados, invertimos el sentido: "más cercanos" = más recientes
       sortOrder = (sortOrder === 'date_asc') ? 'date_desc' : 'date_asc';
     }
     all = sortEvents(all, sortOrder);
 
     const total = all.length;
     const totalPages = Math.ceil(total / PER_PAGE);
-
     let currentPage = Math.min(page, totalPages || 1);
     if (currentPage < 1) currentPage = 1;
-
     if (isAcad) state.pageAcad = currentPage;
     else state.pageInv = currentPage;
 
     const start = (currentPage - 1) * PER_PAGE;
     const paginatedEvents = all.slice(start, start + PER_PAGE);
 
-    const filterButtons = `
-      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <div style="display:flex; gap:8px;">
-          <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-            <i class="fa-solid fa-circle-check"></i> Activos
-          </button>
-          <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
-            <i class="fa-solid fa-calendar-check"></i> Pasados
-          </button>
-        </div>
-        <div style="margin-left: auto;">
-          <select id="sort-select-${context}" class="btn btn-secondary btn-sm" style="background:#fff; color:var(--primary); border:1px solid var(--primary);">
-            <option value="date_asc" ${sort === 'date_asc' ? 'selected' : ''}>Más cercanos primero</option>
-            <option value="date_desc" ${sort === 'date_desc' ? 'selected' : ''}>Más lejanos primero</option>
-          </select>
-        </div>
+    // Contenedor flexible sin salto de línea
+    const filterRow = `
+      <div style="display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin-bottom:16px;">
+        <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-circle-check"></i> Activos
+        </button>
+        <button class="btn ${filter === 'past' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','past')" style="${filter === 'past' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
+          <i class="fa-solid fa-calendar-check"></i> Pasados
+        </button>
+        <button class="btn btn-secondary" onclick="${isAcad ? 'toggleAcademicSort()' : 'toggleInvestigationSort()'}" style="background:#fff; color:var(--primary); border:2px solid var(--primary); white-space:nowrap;">
+          <i class="fa-solid ${sort === 'date_asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short'}"></i>
+          ${sort === 'date_asc' ? 'Cercanos' : 'Lejanos'}
+        </button>
       </div>
     `;
 
     c.innerHTML = `
       <div class="section-title">
         <h2><i class="fa-solid fa-${isAcad ? 'book' : 'flask'}"></i> Eventos ${isAcad ? 'Académicos' : 'de Investigación'}</h2>
-        ${state.role === 'admin' ? `<button class="btn" onclick="openEventForm('${isAcad ? 'académico' : 'investigación'}')"><i class="fa-solid fa-plus"></i> Nuevo evento</button>` : ''}
+        ${state.role === 'admin' ? `<button class="btn" onclick="openEventForm('${tipo}')"><i class="fa-solid fa-plus"></i> Nuevo evento</button>` : ''}
       </div>
-      ${filterButtons}
+      ${filterRow}
       ${paginatedEvents.length ? `<div class="events-grid" style="margin-top:24px">${(await Promise.all(paginatedEvents.map(e => cardHtml(e)))).join('')}</div>` : emptyHtml('No hay eventos disponibles en este momento.')}
       ${paginationHtml(currentPage, totalPages, context)}
     `;
-
-    // Asignar evento change al selector de orden
-    const sortSelect = document.getElementById(`sort-select-${context}`);
-    if (sortSelect) {
-      sortSelect.addEventListener('change', (e) => {
-        setEventSort(context, e.target.value);
-      });
-    }
   } catch (err) {
     console.error(err);
     c.innerHTML = emptyHtml('Error al cargar eventos.');
