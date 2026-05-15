@@ -345,11 +345,13 @@ textarea {
     text-align: center;
     color: #fff;
     background-size: cover;
-    background-position: center
+    background-position: center;
+    pointer-events: none;
 }
 
 .slide.active {
-    opacity: 1
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .slide::before {
