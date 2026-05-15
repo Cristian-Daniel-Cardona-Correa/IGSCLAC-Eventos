@@ -1717,3 +1717,9 @@ footer {
         white-space: nowrap;
     }
 }
+
+@media (min-width: 993px) {
+    .events-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
