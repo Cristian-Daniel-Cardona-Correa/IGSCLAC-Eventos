@@ -1433,6 +1433,10 @@ footer {
         height: 340px
     }
 
+    .hero-dots {
+        display: none;
+    }
+
     .slide-content h1 {
         font-size: 26px
     }
