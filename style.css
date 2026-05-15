@@ -1590,7 +1590,7 @@ footer {
         width: max-content;
     }
 
-      /* Contenedor de los botones de filtro (académicos e investigación) */
+    /* Contenedor de los botones de filtro (académicos e investigación) */
     #content div[style*="display:flex; gap:8px; flex-wrap:wrap"] {
         display: flex;
         flex-wrap: wrap;
@@ -1605,6 +1605,16 @@ footer {
         white-space: nowrap;
         font-size: 12px;
         padding: 8px 6px;
+    }
+
+    /* Título y fecha con salto de línea en tablas del admin */
+    #academic-table-container table td:nth-child(2),
+    #academic-table-container table td:nth-child(3),
+    #research-table-container table td:nth-child(2),
+    #research-table-container table td:nth-child(3) {
+        word-break: break-word;
+        white-space: normal;
+        max-width: 120px;
     }
 
     .action-buttons {
