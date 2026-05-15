@@ -97,25 +97,41 @@ function sortRegistros(registros, sortBy) {
 
 function initSelect2(containerSelector = '.select2-evento') {
   const modal = document.getElementById('hero-editor-modal');
-  const dropdownParent = modal ? modal.querySelector('div[style*="max-width"]') : document.body;
+  if (!modal) return;
+
+  const scrollContainer = modal.querySelector('div[style*="max-width"]');
+  let openCount = 0;
+
+  const lockScroll = () => {
+    if (scrollContainer) scrollContainer.style.overflowY = 'hidden';
+  };
+  const unlockScroll = () => {
+    if (scrollContainer) scrollContainer.style.overflowY = 'auto';
+  };
 
   jQuery(containerSelector).each(function () {
     if (jQuery(this).data('select2')) {
       jQuery(this).select2('destroy');
     }
+
     jQuery(this).select2({
       placeholder: 'Buscar evento...',
       allowClear: true,
       width: '100%',
-      dropdownParent: dropdownParent,
+      dropdownParent: scrollContainer,
       language: {
-        noResults: function () {
-          return "No se encontraron eventos";
-        },
-        searching: function () {
-          return "Buscando…";
-        }
+        noResults: function () { return "No se encontraron eventos"; },
+        searching: function () { return "Buscando…"; }
       }
+    });
+
+    jQuery(this).on('select2:open', function () {
+      if (openCount === 0) lockScroll();
+      openCount++;
+    });
+    jQuery(this).on('select2:close', function () {
+      openCount--;
+      if (openCount === 0) unlockScroll();
     });
   });
 }
@@ -1397,6 +1413,9 @@ function cancelarEditorHero() {
   const modal = document.getElementById('hero-editor-modal');
   if (modal) modal.remove();
 
+  // Restaurar el scroll de fondo
+  document.body.style.overflow = '';
+
   slides = JSON.parse(JSON.stringify(originalSlides));
   workingSlides = [];
   originalSlides = [];
@@ -1441,6 +1460,8 @@ function abrirEditorHeroSlides() {
 
     document.body.insertAdjacentHTML('beforeend', modal);
     renderHeroSliderEditor();
+
+    document.body.style.overflow = 'hidden';
   })();
 }
 
@@ -1821,6 +1842,9 @@ async function guardarHeroSlidesCambios() {
   workingSlides = [];
 
   editorModal.remove();
+
+  // Restaurar el scroll de fondo
+  document.body.style.overflow = '';
 }
 
 function renumberSlides() {
