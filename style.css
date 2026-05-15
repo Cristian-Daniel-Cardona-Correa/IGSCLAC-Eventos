@@ -483,6 +483,10 @@ textarea {
     color: #fff !important;
 }
 
+#hero-editor-modal select.select2-evento {
+    display: none;
+}
+
 @keyframes fadeUp {
     from {
         opacity: 0;

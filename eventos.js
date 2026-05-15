@@ -1516,44 +1516,6 @@ async function renderHeroSliderEditor() {
 
   // Asignar el evento click al botón de agregar
   document.getElementById('agregar-slide-btn').onclick = () => agregarSlideHero();
-
-  // Agregar event listeners para cambio de tipo de acción
-  workingSlides.forEach((_, i) => {
-    const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
-    if (tipoSelect) {
-      tipoSelect.addEventListener('change', () => {
-        const container = document.querySelector(`.slide-accion-container-${i}`);
-        const tipo = tipoSelect.value;
-        const accionActual = document.querySelector(`.slide-accion-${i}`)?.value || workingSlides[i].accion;
-        container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, todosEventos);
-        const botonInput = document.querySelector(`.slide-boton-${i}`);
-        const accionSelect = document.querySelector(`.slide-accion-${i}`);
-        if (accionSelect && botonInput) accionSelect.disabled = botonInput.value.trim() === '';
-      });
-    }
-
-    const botonInput = document.querySelector(`.slide-boton-${i}`);
-    if (botonInput) {
-      const asteriscoAccion = document.querySelector(`.req-accion-${i}`);
-      const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
-      const toggleAsteriscoYDisabled = () => {
-        const tieneTexto = botonInput.value.trim() !== '';
-        if (asteriscoAccion) asteriscoAccion.style.display = tieneTexto ? 'inline' : 'none';
-        if (tipoSelect) tipoSelect.disabled = !tieneTexto;
-        const accionSelect = document.querySelector(`.slide-accion-${i}`);
-        if (accionSelect) {
-          accionSelect.disabled = !tieneTexto;
-          if (!tieneTexto) {
-            const existingError = accionSelect.parentNode.querySelector('.field-error');
-            if (existingError) existingError.remove();
-            accionSelect.classList.remove('error');
-          }
-        }
-      };
-      botonInput.addEventListener('input', toggleAsteriscoYDisabled);
-      toggleAsteriscoYDisabled();
-    }
-  });
 }
 
 function renderAccionInput(index, slide, todosEventos = []) {
@@ -1717,7 +1679,6 @@ function updateSlideNumbers() {
   });
 }
 
-// Adjuntar event listeners a un slide específico (cambio de tipoAcción, etc.)
 function attachEventListenersToSlide(i) {
   const tipoSelect = document.querySelector(`.slide-tipo-${i}`);
   const botonInput = document.querySelector(`.slide-boton-${i}`);
@@ -1730,10 +1691,11 @@ function attachEventListenersToSlide(i) {
     container.innerHTML = renderAccionInput(i, { tipoAccion: tipo, accion: accionActual }, cachedAllEvents);
 
     const accionSelect = document.querySelector(`.slide-accion-${i}`);
-    if (accionSelect && botonInput) accionSelect.disabled = botonInput.value.trim() === '';
+    if (accionSelect) accionSelect.disabled = botonInput.value.trim() === '';
 
-    if (container.querySelector('.select2-evento')) {
-      initSelect2('.select2-evento');
+    const nuevoSelect = container.querySelector('.select2-evento');
+    if (nuevoSelect) {
+      initSelect2(`.slide-accion-container-${i} .select2-evento`);
     }
   });
 
