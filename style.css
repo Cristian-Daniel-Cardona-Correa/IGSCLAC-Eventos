@@ -851,13 +851,16 @@ input:checked+.toggle-slider:before {
 /* ===================== ADMIN TABLE COLUMN WIDTHS ===================== */
 #academic-table-container table th:nth-child(2),
 #research-table-container table th:nth-child(2) {
-    width: 25%;            /* Título ocupa casi la mitad */
-    min-width: 130px;      /* para que no se encoja demasiado */
+    width: 25%;
+    /* Título ocupa casi la mitad */
+    min-width: 130px;
+    /* para que no se encoja demasiado */
 }
 
 #academic-table-container table th:nth-child(3),
 #research-table-container table th:nth-child(3) {
-    width: 14%;            /* Fecha con buen espacio */
+    width: 14%;
+    /* Fecha con buen espacio */
     min-width: 90px;
 }
 
@@ -1526,6 +1529,32 @@ footer {
         white-space: normal;
         display: inline-block;
         max-width: 90%;
+    }
+
+    .slide-container>div:first-child {
+        flex-wrap: wrap !important;
+        gap: 8px;
+    }
+
+    .slide-container>div:first-child h3 {
+        flex: 1 1 auto;
+        min-width: 150px;
+    }
+
+    .slide-container>div:first-child>div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: flex-end;
+    }
+
+    .slide-container .form-group div[style*="display:flex"] {
+        flex-wrap: wrap !important;
+    }
+
+    .slide-container .form-group div[style*="display:flex"] input {
+        min-width: 200px;
+        flex: 1 1 auto;
     }
 
     .form-grid {
