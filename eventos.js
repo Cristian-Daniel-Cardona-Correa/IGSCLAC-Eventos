@@ -354,7 +354,65 @@ async function cargarHeroSlides() {
       slides = [
         { titulo: 'Sin slides configurados', descripcion: 'Por favor, configure los slides desde el panel admin.', imagen: '', textoBoton: '', tipoAccion: 'navegacion', accion: 'home', overlayActivo: true }
       ];
+      buildHero();
+      return;
     }
+
+    // Sincronizar slides con el estado real de los eventos
+    try {
+      const [acad, inv] = await Promise.all([
+        cargarEventos('académico', true),
+        cargarEventos('investigación', true)
+      ]);
+      const todosEventos = [...acad, ...inv];
+      let huboCambios = false;
+
+      slides = slides.map(slide => {
+        if (slide.tipoAccion !== 'evento' && slide.tipoAccion !== 'evento_pasado') return slide;
+        if (!slide.accion) return slide;
+
+        const evento = todosEventos.find(e => e.id === slide.accion);
+
+        // Evento eliminado o no encontrado → redirigir a home
+        if (!evento) {
+          huboCambios = true;
+          return { ...slide, tipoAccion: 'navegacion', accion: 'home' };
+        }
+
+        const esPasado = isEventPast(evento);
+        const esBorrador = evento.habilitado === false && !esPasado;
+
+        // Borrador → redirigir a home
+        if (esBorrador) {
+          huboCambios = true;
+          return { ...slide, tipoAccion: 'navegacion', accion: 'home' };
+        }
+
+        // Evento activo que ya pasó → convertir a evento_pasado
+        if (slide.tipoAccion === 'evento' && esPasado) {
+          huboCambios = true;
+          return { ...slide, tipoAccion: 'evento_pasado' };
+        }
+
+        // Evento pasado que volvió a ser activo
+        if (slide.tipoAccion === 'evento_pasado' && !esPasado) {
+          huboCambios = true;
+          return { ...slide, tipoAccion: 'evento' };
+        }
+
+        return slide;
+      });
+
+      if (huboCambios) {
+        fetchAPI('/hero-slides', {
+          method: 'POST',
+          body: { slides }
+        }).catch(err => console.warn('No se pudieron persistir correcciones de slides:', err));
+      }
+    } catch (syncErr) {
+      console.warn('No se pudo sincronizar slides con eventos:', syncErr);
+    }
+
     buildHero();
   } catch (err) {
     console.error('Error al cargar hero slides:', err);
@@ -1195,7 +1253,7 @@ async function downloadFullReportPDF(evento, registros) {
   doc.line(margin, y, pageWidth - margin, y);
   y += 8;
 
-  // ====== TABLA DE METADATOS (usa doc.rect para simular tabla) ======
+  // ====== TABLA DE METADATOS ======
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
 
@@ -1536,14 +1594,17 @@ function abrirEditorHeroSlides() {
             mensajes.push(`🔄 Slide ${i + 1}: el evento "${evento.titulo}" ha pasado a ser pasado. Se cambió automáticamente a "Ir a Evento Pasado".`);
           }
           else if (slide.tipoAccion === 'evento_pasado' && !esPasado && !esBorrador) {
-            // Si algún día quieres volver a activar eventos pasados (no es común)
+            // Si algún día quieres volver a activar eventos pasados
             slide.tipoAccion = 'evento';
             cambios = true;
             mensajes.push(`🔄 Slide ${i + 1}: el evento "${evento.titulo}" ya no es pasado. Se cambió a "Ir a Evento".`);
           }
 
           if (esBorrador) {
-            mensajes.push(`⚠️ Slide ${i + 1}: el evento "${evento.titulo}" está deshabilitado (borrador). Verifica si quieres mantenerlo.`);
+            slide.tipoAccion = 'navegacion';
+            slide.accion = 'home';
+            cambios = true;
+            mensajes.push(`⚠️ Slide ${i + 1}: el evento "${evento.titulo}" está deshabilitado (borrador). Se ha cambiado automáticamente a "Inicio".`);
           }
         }
       }
@@ -2476,7 +2537,6 @@ async function validateAndSaveEvent(tipo, id) {
       return;
     }
   }
-  // ***** FIN NUEVA VALIDACIÓN *****
 
   const data = Object.fromEntries(new FormData(form).entries());
   data.tipoEvento = tipoEventoFinal;
