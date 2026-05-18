@@ -714,27 +714,3 @@ function igsclac_guardar_hero_slides($request) {
     delete_transient( 'igsclac_hero_slides_cached' );
     return rest_ensure_response(array('success' => true, 'slides' => $slides));
 }
-
-/* ============================================================
-   MIGRACIÓN ÚNICA: Agregar columna asistentes_manuales si no existe
-============================================================ */
-function igsclac_agregar_columna_asistentes_manuales() {
-    $version_db = get_option( 'igsclac_db_version', '0' );
-    if ( version_compare( $version_db, '1.2', '<' ) ) {
-        global $wpdb;
-        $tabla = $wpdb->prefix . 'igsclac_eventos';
-        
-        $columna_existe = $wpdb->get_results( $wpdb->prepare(
-            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
-             WHERE TABLE_NAME = %s AND COLUMN_NAME = 'asistentes_manuales'",
-            $tabla
-        ) );
-        
-        if ( empty( $columna_existe ) ) {
-            $wpdb->query( "ALTER TABLE $tabla ADD COLUMN asistentes_manuales INT DEFAULT 0 NOT NULL" );
-        }
-        
-        update_option( 'igsclac_db_version', '1.2' );
-    }
-}
-add_action( 'admin_init', 'igsclac_agregar_columna_asistentes_manuales' );

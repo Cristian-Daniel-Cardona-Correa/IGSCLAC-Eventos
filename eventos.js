@@ -12,6 +12,11 @@ if (typeof wpApiSettings === 'undefined') {
   var wpApiSettings = { root: '/wp-json/', nonce: '' };
 }
 
+// Cachés locales para reducir peticiones a la API
+const eventosCache = new Map();       // clave: `${tipo}_${includeDisabled}`
+const registrosCache = new Map();     // clave: eventoId
+let searchTimeout;                    // para debounce
+
 const PER_PAGE = 6;
 
 const userLoggedIn = (typeof igsclacMediaNonce !== 'undefined' && igsclacMediaNonce.userLoggedIn);
@@ -228,9 +233,12 @@ async function fetchAPI(endpoint, options = {}) {
 
 // Llamadas API
 async function cargarEventos(tipo, includeDisabled = false) {
+  const cacheKey = `${tipo}_${includeDisabled}`;
+  if (eventosCache.has(cacheKey)) {
+    return eventosCache.get(cacheKey);
+  }
   const endpoint = tipo === 'académico' ? '/eventos/academicos' : '/eventos/investigacion';
   let url = API_BASE + endpoint;
-  // Si es administrador, añadimos un parámetro anti-caché
   if (state.role === 'admin') {
     url += (url.includes('?') ? '&' : '?') + '_=' + Date.now();
   }
@@ -240,8 +248,9 @@ async function cargarEventos(tipo, includeDisabled = false) {
   });
   if (!res.ok) throw new Error(`Error ${res.status}`);
   const items = await res.json();
-  if (includeDisabled) return items;
-  return (items || []).filter(e => e.habilitado !== false);
+  const result = includeDisabled ? items : (items || []).filter(e => e.habilitado !== false);
+  eventosCache.set(cacheKey, result);
+  return result;
 }
 
 async function cargarEventosPaginado(tipo, page, perPage) {
@@ -268,7 +277,12 @@ async function eliminarEvento(id) {
 }
 
 async function cargarRegistros(eventoId) {
-  return await fetchAPI(`/registros/${eventoId}`);
+  if (registrosCache.has(eventoId)) {
+    return registrosCache.get(eventoId);
+  }
+  const data = await fetchAPI(`/registros/${eventoId}`);
+  registrosCache.set(eventoId, data);
+  return data;
 }
 
 async function crearRegistro(data) {
@@ -567,6 +581,9 @@ function applyRole() {
   // Mostrar u ocultar enlace "Panel Admin" en el menú
   $('#nav-admin').style.display = state.role === 'admin' ? 'block' : 'none';
   updateHeroEditButton();
+
+  eventosCache.clear();
+  registrosCache.clear();
 }
 
 // ---------- NAVEGACIÓN ----------
@@ -605,9 +622,12 @@ function setBreadcrumbs(items) {
 
 // ---------- BÚSQUEDA ----------
 function handleSearch() {
-  state.search = $('#search-input').value.trim().toLowerCase();
-  state.pageHome = 1; state.pageAcad = 1; state.pageInv = 1;
-  if (state.view === 'academicos' || state.view === 'investigacion' || state.view === 'home') render();
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    state.search = $('#search-input').value.trim().toLowerCase();
+    state.pageHome = 1; state.pageAcad = 1; state.pageInv = 1;
+    if (state.view === 'academicos' || state.view === 'investigacion' || state.view === 'home') render();
+  }, 300);
 }
 
 // ---------- RENDER ----------
@@ -2055,6 +2075,8 @@ async function deleteEvent(id, tipoKey) {
   if (!confirm('¿Eliminar este evento? Esta acción no se puede deshacer.')) return;
   try {
     await eliminarEvento(id);
+    eventosCache.clear();
+    registrosCache.clear();
     toast('Evento eliminado');
     render();
   } catch (err) {
@@ -2315,6 +2337,8 @@ async function validateAndSubmitRegister(eventoId, tipoKey) {
   const data = { eventoId, nombres, apellidos, email, tipoId, identificacion, cargo, institucion };
   try {
     await crearRegistro(data);
+    registrosCache.delete(eventoId);
+    eventosCache.clear();
     closeModal();
     toast('¡Registro confirmado! Te esperamos en el evento.');
     render();
@@ -2396,6 +2420,7 @@ async function validateAndSaveEvent(tipo, id) {
 
   try {
     await guardarEvento(data.tipo, data, id || null);
+    eventosCache.clear();
     closeModal();
     toast(id ? 'Evento actualizado' : 'Evento creado correctamente');
     render();
@@ -2774,6 +2799,7 @@ async function saveAsistentes(id, tipoKey) {
     const invActualizados = await cargarEventos('investigación', true);
     cachedAcademicEvents = acadActualizados;
     cachedResearchEvents = invActualizados;
+    eventosCache.clear();
 
     if (evento) {
       evento.asistentes_manuales = cantidad;
@@ -2844,6 +2870,7 @@ async function toggleEventVisibility(event, id, tipoKey) {
 
   try {
     await fetchAPI(`/eventos/${id}/toggle`, { method: 'POST', body: { habilitado: newState } });
+    eventosCache.clear();
     toast(newState ? 'Evento habilitado' : 'Evento deshabilitado');
 
     // Refrescar solo los eventos cacheados y regenerar tabla sin render() completo
