@@ -59,15 +59,24 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '
 const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); };
 function toast(msg, type = '') { const t = $('#toast'); t.textContent = msg; t.className = 'toast show ' + type; clearTimeout(window._tt); window._tt = setTimeout(() => t.classList.remove('show'), 3200); }
 
-// Bloquear scroll del body (útil para móviles)
+// Variable global para almacenar el scroll antes del bloqueo
+let scrollYBeforeModal = 0;
+
 function disableBodyScroll() {
     const body = document.body;
-    body.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.width = '100%';
-    body.dataset.scrollTop = window.scrollY;
+    const html = document.documentElement;
 
-    // Ocultar admin bar para evitar conflicto con position:fixed
+    scrollYBeforeModal = window.scrollY;
+
+    // Bloquear el scroll sin mover la vista
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+
+    // Evitar que el contenido se desplace al desaparecer la barra de scroll
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    body.style.paddingRight = scrollbarWidth + 'px';
+
+    // Ocultar admin bar si es necesario
     const adminBar = document.getElementById('wpadminbar');
     if (adminBar) adminBar.style.display = 'none';
 
@@ -76,18 +85,19 @@ function disableBodyScroll() {
 
 function enableBodyScroll() {
     const body = document.body;
+    const html = document.documentElement;
+
+    // Restaurar el scroll
     body.style.overflow = '';
-    body.style.position = '';
-    body.style.width = '';
-    const scrollTop = body.dataset.scrollTop;
-    if (scrollTop !== undefined) {
-        window.scrollTo(0, parseInt(scrollTop));
-        delete body.dataset.scrollTop;
-    }
+    html.style.overflow = '';
+    body.style.paddingRight = '';
 
     // Restaurar admin bar
     const adminBar = document.getElementById('wpadminbar');
     if (adminBar) adminBar.style.display = '';
+
+    // Volver a la posición original
+    window.scrollTo(0, scrollYBeforeModal);
 
     body.classList.remove('modal-open');
 }
