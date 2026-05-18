@@ -681,7 +681,6 @@ async function renderHome(c) {
   const start = (state.pageHome - 1) * PER_PAGE;
   const paginatedEvents = all.slice(start, start + PER_PAGE);
 
-  // Contenedor flexible sin salto de línea (scroll horizontal si necesario)
   const filterRow = `
     <div style="display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin-bottom:16px;">
       <button class="btn ${state.filterHome === 'active' ? '' : 'btn-secondary'}" onclick="setHomeFilter('active')" style="${state.filterHome === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
@@ -757,7 +756,6 @@ async function renderEventList(c, tipo) {
     const start = (currentPage - 1) * PER_PAGE;
     const paginatedEvents = all.slice(start, start + PER_PAGE);
 
-    // Contenedor flexible sin salto de línea
     const filterRow = `
       <div style="display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin-bottom:16px;">
         <button class="btn ${filter === 'active' ? '' : 'btn-secondary'}" onclick="setEventFilter('${context}','active')" style="${filter === 'active' ? '' : 'background:#fff;color:var(--primary);border:2px solid var(--primary)'}">
@@ -1129,7 +1127,7 @@ async function downloadFullReportPDF(evento, registros) {
   const margin = 16;
   let y = 24;
 
-  // ====== CABECERA INSTITUCIONAL ======
+  // ====== HEADER  ======
   doc.setFillColor(0, 156, 26);
   doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setTextColor(255, 255, 255);
@@ -1149,7 +1147,6 @@ async function downloadFullReportPDF(evento, registros) {
   doc.text(titleLines, margin, y);
   y += titleLines.length * 8 + 8;
 
-  // Línea decorativa
   doc.setDrawColor(0, 156, 26);
   doc.setLineWidth(0.8);
   doc.line(margin, y, pageWidth - margin, y);
@@ -2096,8 +2093,13 @@ async function duplicateEvent(id, tipoKey) {
   delete clone.id;
   clone.fechaInicio = '';
   clone.fechaFin = '';
-  clone.habilitado = false;
+  // Determinar estado por defecto según la vista actual
+  const isAdminPanel = (state.view === 'admin');
+  clone.habilitado = !isAdminPanel; // true para frontend, false para admin
   const tipoOriginal = original.tipo === 'académico' ? 'académico' : 'investigación';
+
+  // Marcar que se está duplicando para personalizar el mensaje al guardar
+  window._igsclac_duplicating = true;
   openEventForm(tipoOriginal, null, clone);
 }
 
@@ -2421,8 +2423,22 @@ async function validateAndSaveEvent(tipo, id) {
   try {
     await guardarEvento(data.tipo, data, id || null);
     eventosCache.clear();
+
+    // Personalizar mensaje según si es duplicado o nuevo normal
+    let mensaje = id ? 'Evento actualizado' : 'Evento creado correctamente';
+    if (!id && window._igsclac_duplicating) {
+      // Es una duplicación
+      const esAdmin = (state.view === 'admin');
+      if (esAdmin) {
+        mensaje = 'Evento duplicado (se creó DESHABILITADO por defecto)';
+      } else {
+        mensaje = 'Evento duplicado correctamente';
+      }
+      delete window._igsclac_duplicating; // limpiar flag
+    }
+
     closeModal();
-    toast(id ? 'Evento actualizado' : 'Evento creado correctamente');
+    toast(mensaje);
     render();
   } catch (err) {
     toast('Error al guardar: ' + err.message, 'error');
