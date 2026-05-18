@@ -59,6 +59,28 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '
 const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); };
 function toast(msg, type = '') { const t = $('#toast'); t.textContent = msg; t.className = 'toast show ' + type; clearTimeout(window._tt); window._tt = setTimeout(() => t.classList.remove('show'), 3200); }
 
+// Bloquear scroll del body (útil para móviles)
+function disableBodyScroll() {
+  const body = document.body;
+  body.style.overflow = 'hidden';
+  body.style.position = 'fixed';
+  body.style.width = '100%';
+  // Guardar el scroll actual para restaurarlo después
+  body.dataset.scrollTop = window.scrollY;
+}
+
+function enableBodyScroll() {
+  const body = document.body;
+  body.style.overflow = '';
+  body.style.position = '';
+  body.style.width = '';
+  const scrollTop = body.dataset.scrollTop;
+  if (scrollTop !== undefined) {
+    window.scrollTo(0, parseInt(scrollTop));
+    delete body.dataset.scrollTop;
+  }
+}
+
 function calcDuration(ini, fin) {
   if (!ini || !fin) return '';
   const [h1, m1] = ini.split(':').map(Number);
@@ -1441,7 +1463,7 @@ function cancelarEditorHero() {
   if (modal) modal.remove();
 
   // Restaurar el scroll de fondo
-  document.body.style.overflow = '';
+  enableBodyScroll();
 
   slides = JSON.parse(JSON.stringify(originalSlides));
   workingSlides = [];
@@ -1539,7 +1561,7 @@ function abrirEditorHeroSlides() {
     document.body.insertAdjacentHTML('beforeend', modal);
     renderHeroSliderEditor();
 
-    document.body.style.overflow = 'hidden';
+    disableBodyScroll();
   })();
 }
 
@@ -1922,7 +1944,7 @@ async function guardarHeroSlidesCambios() {
   editorModal.remove();
 
   // Restaurar el scroll de fondo
-  document.body.style.overflow = '';
+  enableBodyScroll();
 }
 
 function renumberSlides() {
@@ -2980,7 +3002,7 @@ async function renderUpcoming() {
 function showModal() {
   const modalOverlay = $('#modal-overlay');
   modalOverlay.classList.add('show');
-  document.body.style.overflow = 'hidden';
+  disableBodyScroll();
 
   // Reiniciar el scroll del modal a la posición inicial
   const modalEl = modalOverlay.querySelector('.modal');
@@ -2988,7 +3010,11 @@ function showModal() {
     modalEl.scrollTop = 0;
   }
 }
-function closeModal() { $('#modal-overlay').classList.remove('show'); document.body.style.overflow = ''; }
+
+function closeModal() {
+  $('#modal-overlay').classList.remove('show');
+  enableBodyScroll();
+}
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ---------- HERO ACTIONS HANDLER ----------
