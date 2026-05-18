@@ -2455,6 +2455,29 @@ async function validateAndSaveEvent(tipo, id) {
 
   if (!isValid) return;
 
+  if (id) {
+    try {
+      // Obtener registros actuales del evento
+      const registrosActuales = await cargarRegistros(id);
+      const eventos = await cargarEventos(tipo, true);
+      const eventoActual = eventos.find(e => e.id == id);
+      if (eventoActual) {
+        const totalAsistentesActual = registrosActuales.length + (eventoActual.asistentes_manuales || 0);
+        if (capacidad < totalAsistentesActual) {
+          const mensaje = `⚠️ La nueva capacidad (${capacidad}) es menor que el número de asistentes ya registrados (${totalAsistentesActual}). ¿Deseas continuar?`;
+          if (!confirm(mensaje)) {
+            return; // Cancelar la operación
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error al verificar capacidad:', err);
+      toast('Error al verificar los registros actuales', 'error');
+      return;
+    }
+  }
+  // ***** FIN NUEVA VALIDACIÓN *****
+
   const data = Object.fromEntries(new FormData(form).entries());
   data.tipoEvento = tipoEventoFinal;
   delete data.tipoEventoOtro;
@@ -2467,17 +2490,15 @@ async function validateAndSaveEvent(tipo, id) {
     await guardarEvento(data.tipo, data, id || null);
     eventosCache.clear();
 
-    // Personalizar mensaje según si es duplicado o nuevo normal
     let mensaje = id ? 'Evento actualizado' : 'Evento creado correctamente';
     if (!id && window._igsclac_duplicating) {
-      // Es una duplicación
       const esAdmin = (state.view === 'admin');
       if (esAdmin) {
         mensaje = 'Evento duplicado (se creó DESHABILITADO por defecto)';
       } else {
         mensaje = 'Evento duplicado correctamente';
       }
-      delete window._igsclac_duplicating; // limpiar flag
+      delete window._igsclac_duplicating;
     }
 
     closeModal();
