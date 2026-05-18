@@ -229,7 +229,17 @@ async function fetchAPI(endpoint, options = {}) {
 // Llamadas API
 async function cargarEventos(tipo, includeDisabled = false) {
   const endpoint = tipo === 'académico' ? '/eventos/academicos' : '/eventos/investigacion';
-  const items = await fetchAPI(endpoint);
+  let url = API_BASE + endpoint;
+  // Si es administrador, añadimos un parámetro anti-caché
+  if (state.role === 'admin') {
+    url += (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+  }
+  const res = await fetch(url, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const items = await res.json();
   if (includeDisabled) return items;
   return (items || []).filter(e => e.habilitado !== false);
 }
@@ -1435,6 +1445,57 @@ function abrirEditorHeroSlides() {
     const acad = await cargarEventos('académico', true);
     const inv = await cargarEventos('investigación', true);
     cachedAllEvents = [...acad, ...inv];
+
+    // ==============================================
+    // Sincronizar slides con el estado actual de los eventos
+    // ==============================================
+    let cambios = false;
+    let mensajes = [];
+
+    for (let i = 0; i < workingSlides.length; i++) {
+      const slide = workingSlides[i];
+      if ((slide.tipoAccion === 'evento' || slide.tipoAccion === 'evento_pasado') && slide.accion) {
+        const evento = cachedAllEvents.find(e => e.id === slide.accion);
+
+        if (!evento) {
+          // El evento fue eliminado
+          mensajes.push(`⚠️ Slide ${i + 1}: el evento "${slide.titulo}" ya no existe. Se recomienda revisar.`);
+          // Cambiar a navegación home para evitar error
+          slide.tipoAccion = 'navegacion';
+          slide.accion = 'home';
+          cambios = true;
+        } else {
+          // Evento existe, verificar su estado
+          const esPasado = isEventPast(evento);
+          const esBorrador = evento.habilitado === false && !esPasado;
+
+          if (slide.tipoAccion === 'evento' && esPasado) {
+            // El evento activo se volvió pasado -> convertir a evento_pasado
+            slide.tipoAccion = 'evento_pasado';
+            cambios = true;
+            mensajes.push(`🔄 Slide ${i + 1}: el evento "${evento.titulo}" ha pasado a ser pasado. Se cambió automáticamente a "Ir a Evento Pasado".`);
+          }
+          else if (slide.tipoAccion === 'evento_pasado' && !esPasado && !esBorrador) {
+            // Si algún día quieres volver a activar eventos pasados (no es común)
+            slide.tipoAccion = 'evento';
+            cambios = true;
+            mensajes.push(`🔄 Slide ${i + 1}: el evento "${evento.titulo}" ya no es pasado. Se cambió a "Ir a Evento".`);
+          }
+
+          if (esBorrador) {
+            mensajes.push(`⚠️ Slide ${i + 1}: el evento "${evento.titulo}" está deshabilitado (borrador). Verifica si quieres mantenerlo.`);
+          }
+        }
+      }
+    }
+
+    if (cambios) {
+      originalSlides = JSON.parse(JSON.stringify(workingSlides));
+    }
+
+    if (mensajes.length > 0) {
+      toast(mensajes.join('\n'), 'warning');
+    }
 
     const modal = `
       <div id="hero-editor-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this) cancelarEditorHero()">
@@ -2670,7 +2731,6 @@ async function saveAsistentes(id, tipoKey) {
   const input = document.getElementById('edit-asistentes-input');
   const inputValue = input.value.trim();
 
-  // Validación: campo vacío
   if (!inputValue) {
     toast('Por favor ingresa una cantidad', 'error');
     input.focus();
@@ -2679,25 +2739,21 @@ async function saveAsistentes(id, tipoKey) {
 
   const cantidad = parseInt(inputValue, 10);
 
-  // Validación: NaN
   if (isNaN(cantidad)) {
     toast('La cantidad debe ser un número válido', 'error');
     input.focus();
     return;
   }
 
-  // Obtener evento para validar capacidad
   const eventos = tipoKey === 'acad' ? cachedAcademicEvents : cachedResearchEvents;
   const evento = eventos.find(e => e.id === id);
 
-  // Validación: negativo
   if (cantidad < 0) {
     toast('La cantidad no puede ser negativa', 'error');
     input.focus();
     return;
   }
 
-  // Validación: no excede capacidad
   if (evento && cantidad > evento.capacidad) {
     toast(`La cantidad no puede ser mayor a ${evento.capacidad} (capacidad del evento)`, 'error');
     input.focus();
@@ -2714,7 +2770,11 @@ async function saveAsistentes(id, tipoKey) {
       throw new Error('Error al guardar los datos');
     }
 
-    // Actualizar caché local
+    const acadActualizados = await cargarEventos('académico', true);
+    const invActualizados = await cargarEventos('investigación', true);
+    cachedAcademicEvents = acadActualizados;
+    cachedResearchEvents = invActualizados;
+
     if (evento) {
       evento.asistentes_manuales = cantidad;
     }

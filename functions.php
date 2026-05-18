@@ -4,10 +4,12 @@
    1. ASSETS (CSS + JS)
 ========================================================= */
 function igsclac_assets() {
-
+    
     wp_enqueue_style(
         'igsclac-style',
-        get_stylesheet_uri()
+        get_stylesheet_uri(),
+        array(),
+        filemtime( get_template_directory() . '/style.css' )
     );
 
     wp_enqueue_media();
@@ -15,28 +17,45 @@ function igsclac_assets() {
     wp_enqueue_script(
         'eventos-js',
         get_template_directory_uri() . '/eventos.js',
-        ['jquery'],
-        false,
+        array('jquery'),
+        filemtime( get_template_directory() . '/eventos.js' ),
         true
     );
 
-    wp_enqueue_script(
-        'jspdf',
-        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-        [],
-        null,
-        true
-    );
+    // Librerías solo para admin (modo administrador)
+    if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
+        wp_enqueue_script(
+            'jspdf',
+            'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+            array(),
+            null,
+            true
+        );
 
-    wp_enqueue_script(
-        'sheetjs',
-        'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js',
-        [],
-        null,
-        true
-    );
+        wp_enqueue_script(
+            'sheetjs',
+            'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js',
+            array(),
+            null,
+            true
+        );
 
-    // Localizar variables para el script
+        wp_enqueue_style(
+            'select2-css',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+            array(),
+            '4.1.0-rc.0'
+        );
+        wp_enqueue_script(
+            'select2-js',
+            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
+            array('jquery'),
+            '4.1.0-rc.0',
+            true
+        );
+    }
+
+    // Localizar variables
     wp_localize_script('eventos-js', 'wpApiSettings', array(
         'root'  => esc_url_raw(rest_url()),
         'nonce' => wp_create_nonce('wp_rest')
@@ -82,6 +101,7 @@ function igsclac_crear_tablas() {
         registro_habilitado TINYINT(1) DEFAULT 1,
         habilitado TINYINT(1) DEFAULT 1,
         eje_tematico VARCHAR(255) NULL,
+        asistentes_manuales INT DEFAULT 0 NOT NULL,
         PRIMARY KEY (id),
         KEY tipo (tipo),
         KEY fecha_inicio (fecha_inicio)
@@ -112,61 +132,40 @@ function igsclac_crear_tablas() {
 add_action('after_switch_theme', 'igsclac_crear_tablas');
 
 /* ============================================================
-   2.5 MIGRACIÓN: Agregar columna habilitado si no existe
+   2.5 DESHABILITAR EVENTOS ANTIGUOS (mediante CRON)
 ============================================================ */
-function igsclac_migrar_habilitado() {
-    global $wpdb;
-    $tabla = $wpdb->prefix . 'igsclac_eventos';
-    
-    // Verificar si la columna ya existe
-    $column_exists = $wpdb->get_results(
-        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
-         WHERE TABLE_NAME = '$tabla' AND COLUMN_NAME = 'habilitado'"
-    );
-    
-    if (empty($column_exists)) {
-        // La columna no existe, crearla
-        $wpdb->query("ALTER TABLE $tabla ADD COLUMN habilitado TINYINT(1) DEFAULT 1");
+function igsclac_programar_cron() {
+    if ( ! wp_next_scheduled( 'igsclac_limpiar_eventos_pasados' ) ) {
+        wp_schedule_event( time(), 'twicedaily', 'igsclac_limpiar_eventos_pasados' );
     }
 }
-add_action('wp_loaded', 'igsclac_migrar_habilitado');
+add_action( 'after_switch_theme', 'igsclac_programar_cron' );
 
-/* ============================================================
-   2.6 DESHABILITAR EVENTOS ANTIGUOS AUTOMÁTICAMENTE
-============================================================ */
+// Cancelar al cambiar de tema
+function igsclac_cancelar_cron() {
+    wp_clear_scheduled_hook( 'igsclac_limpiar_eventos_pasados' );
+}
+add_action( 'switch_theme', 'igsclac_cancelar_cron' );
+
+// La función que deshabilita eventos antiguos
 function igsclac_deshabilitar_eventos_antiguos() {
     global $wpdb;
     $tabla = $wpdb->prefix . 'igsclac_eventos';
-    // Ahora usamos la fecha y hora actual del servidor
-    $wpdb->query(
+    $updated = $wpdb->query(
         "UPDATE $tabla SET habilitado = 0 
          WHERE CONCAT(fecha_fin, ' ', hora_fin) < NOW() 
          AND habilitado = 1"
     );
-}
-add_action('wp_loaded', 'igsclac_deshabilitar_eventos_antiguos');
-
-/* ============================================================
-   2.7 MIGRACIÓN: Agregar columna asistentes_manuales
-============================================================ */
-function igsclac_migrar_asistentes_manuales() {
-    global $wpdb;
-    $tabla = $wpdb->prefix . 'igsclac_eventos';
     
-    // Verificar si la columna ya existe
-    $result = $wpdb->get_results("DESCRIBE $tabla WHERE Field = 'asistentes_manuales'");
-    
-    if (empty($result)) {
-        // La columna no existe, crearla
-        $wpdb->query("ALTER TABLE $tabla ADD COLUMN `asistentes_manuales` INT DEFAULT 0 NOT NULL");
-        error_log('Columna asistentes_manuales creada en ' . $tabla);
+    if ($updated > 0) {
+        igsclac_invalidate_eventos_cache();
     }
 }
-add_action('wp_loaded', 'igsclac_migrar_asistentes_manuales');
-add_action('rest_api_init', 'igsclac_migrar_asistentes_manuales');
+add_action( 'igsclac_limpiar_eventos_pasados', 'igsclac_deshabilitar_eventos_antiguos' );
+add_action( 'wp_loaded', 'igsclac_deshabilitar_eventos_antiguos' );
 
 /* ============================================================
-   3. ENDPOINTS REST PARA EVENTOS Y REGISTROS
+   3. ENDPOINTS REST PARA EVENTOS Y REGISTROS (CON CACHÉ)
 ============================================================ */
 add_action('rest_api_init', function () {
     // Obtener eventos académicos
@@ -241,72 +240,124 @@ add_action('rest_api_init', function () {
     ));
 });
 
-function igsclac_obtener_eventos( $request ) {
-    global $wpdb;
-
-    $tipo     = $request->get_param('tipo') === 'academico' ? 'academico' : 'investigacion';
-    $page     = max( 1, (int) $request->get_param('page') );
-    $per_page = (int) $request->get_param('per_page'); // 0 = sin límite
-    $tabla    = $wpdb->prefix . 'igsclac_eventos';
-
-    // Total sin paginar (para los headers)
-    $total = (int) $wpdb->get_var( $wpdb->prepare(
-        "SELECT COUNT(*) FROM $tabla WHERE tipo = %s",
-        $tipo
-    ));
-
-    if ( $per_page > 0 ) {
-        $offset  = ( $page - 1 ) * $per_page;
+// --- Funciones auxiliares de caché ---
+function igsclac_get_cached_eventos( $tipo ) {
+    // Los administradores siempre ven datos frescos (sin caché)
+    if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
+        global $wpdb;
+        $tabla = $wpdb->prefix . 'igsclac_eventos';
         $results = $wpdb->get_results( $wpdb->prepare(
-            "SELECT * FROM $tabla WHERE tipo = %s ORDER BY fecha_inicio DESC LIMIT %d OFFSET %d",
-            $tipo, $per_page, $offset
-        ), ARRAY_A );
-        $total_pages = (int) ceil( $total / $per_page );
-    } else {
-        $results     = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM $tabla WHERE tipo = %s ORDER BY fecha_inicio DESC",
             $tipo
         ), ARRAY_A );
+        return array_map( function( $e ) {
+            return array(
+                'id'                 => $e['id'],
+                'tipo'               => $e['tipo'] === 'academico' ? 'académico' : 'investigación',
+                'titulo'             => $e['titulo'],
+                'descripcion'        => $e['descripcion'],
+                'tipoEvento'         => $e['tipo_evento'],
+                'clasificacion'      => $e['clasificacion'],
+                'fechaInicio'        => $e['fecha_inicio'],
+                'fechaFin'           => $e['fecha_fin'],
+                'horaInicio'         => $e['hora_inicio'],
+                'horaFin'            => $e['hora_fin'],
+                'comite'             => $e['comite'],
+                'lugar'              => $e['lugar'],
+                'direccion'          => $e['direccion'],
+                'capacidad'          => (int) $e['capacidad'],
+                'imagen'             => $e['imagen'],
+                'enlace'             => $e['enlace'],
+                'registroHabilitado' => (bool) $e['registro_habilitado'],
+                'habilitado'         => isset($e['habilitado']) ? (bool) $e['habilitado'] : true,
+                'ejeTematico'        => $e['eje_tematico'],
+                'asistentes_manuales'=> isset($e['asistentes_manuales']) ? (int) $e['asistentes_manuales'] : 0,
+            );
+        }, $results );
+    }
+
+    // Para usuarios normales, usamos caché (transient)
+    $cache_key = 'igsclac_eventos_' . $tipo;
+    $eventos = get_transient( $cache_key );
+    if ( false === $eventos ) {
+        global $wpdb;
+        $tabla = $wpdb->prefix . 'igsclac_eventos';
+        $results = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM $tabla WHERE tipo = %s ORDER BY fecha_inicio DESC",
+            $tipo
+        ), ARRAY_A );
+        $eventos = array_map( function( $e ) {
+            return array(
+                'id'                 => $e['id'],
+                'tipo'               => $e['tipo'] === 'academico' ? 'académico' : 'investigación',
+                'titulo'             => $e['titulo'],
+                'descripcion'        => $e['descripcion'],
+                'tipoEvento'         => $e['tipo_evento'],
+                'clasificacion'      => $e['clasificacion'],
+                'fechaInicio'        => $e['fecha_inicio'],
+                'fechaFin'           => $e['fecha_fin'],
+                'horaInicio'         => $e['hora_inicio'],
+                'horaFin'            => $e['hora_fin'],
+                'comite'             => $e['comite'],
+                'lugar'              => $e['lugar'],
+                'direccion'          => $e['direccion'],
+                'capacidad'          => (int) $e['capacidad'],
+                'imagen'             => $e['imagen'],
+                'enlace'             => $e['enlace'],
+                'registroHabilitado' => (bool) $e['registro_habilitado'],
+                'habilitado'         => isset($e['habilitado']) ? (bool) $e['habilitado'] : true,
+                'ejeTematico'        => $e['eje_tematico'],
+                'asistentes_manuales'=> isset($e['asistentes_manuales']) ? (int) $e['asistentes_manuales'] : 0,
+            );
+        }, $results );
+        set_transient( $cache_key, $eventos, 1 * MINUTE_IN_SECONDS );
+    }
+    return $eventos;
+}
+
+function igsclac_invalidate_eventos_cache() {
+    delete_transient( 'igsclac_eventos_academico' );
+    delete_transient( 'igsclac_eventos_investigacion' );
+}
+
+// Callback optimizado con caché
+function igsclac_obtener_eventos( $request ) {
+    $tipo     = $request->get_param('tipo') === 'academico' ? 'academico' : 'investigacion';
+    $page     = max( 1, (int) $request->get_param('page') );
+    $per_page = (int) $request->get_param('per_page');
+    
+    $eventos = igsclac_get_cached_eventos( $tipo );
+    $total = count( $eventos );
+
+    if ( $per_page > 0 ) {
+        $offset  = ( $page - 1 ) * $per_page;
+        $results = array_slice( $eventos, $offset, $per_page );
+        $total_pages = (int) ceil( $total / $per_page );
+    } else {
+        $results     = $eventos;
         $total_pages = 1;
         $page        = 1;
     }
 
-    $eventos = array_map( function( $e ) {
-        return array(
-            'id'                 => $e['id'],
-            'tipo'               => $e['tipo'] === 'academico' ? 'académico' : 'investigación',
-            'titulo'             => $e['titulo'],
-            'descripcion'        => $e['descripcion'],
-            'tipoEvento'         => $e['tipo_evento'],
-            'clasificacion'      => $e['clasificacion'],
-            'fechaInicio'        => $e['fecha_inicio'],
-            'fechaFin'           => $e['fecha_fin'],
-            'horaInicio'         => $e['hora_inicio'],
-            'horaFin'            => $e['hora_fin'],
-            'comite'             => $e['comite'],
-            'lugar'              => $e['lugar'],
-            'direccion'          => $e['direccion'],
-            'capacidad'          => (int) $e['capacidad'],
-            'imagen'             => $e['imagen'],
-            'enlace'             => $e['enlace'],
-            'registroHabilitado' => (bool) $e['registro_habilitado'],
-            'habilitado'         => isset($e['habilitado']) ? (bool) $e['habilitado'] : true,
-            'ejeTematico'        => $e['eje_tematico'],
-            'asistentes_manuales' => isset($e['asistentes_manuales']) ? (int) $e['asistentes_manuales'] : 0,
-        );
-    }, $results );
-
-    $response = rest_ensure_response( $eventos );
+    $response = rest_ensure_response( $results );
     $response->header( 'X-WP-Total',      $total );
     $response->header( 'X-WP-TotalPages', $total_pages );
     $response->header( 'X-WP-Page',       $page );
     $response->header( 'X-WP-PerPage',    $per_page );
     $response->header( 'Access-Control-Expose-Headers',
         'X-WP-Total, X-WP-TotalPages, X-WP-Page, X-WP-PerPage' );
-
+    
+    // Si es administrador, desactivamos la caché del navegador
+    if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
+        $response->header( 'Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0' );
+        $response->header( 'Pragma', 'no-cache' );
+        $response->header( 'Expires', '0' );
+    }
+    
     return $response;
 }
 
+// Guardar evento con invalidación de caché
 function igsclac_guardar_evento($request) {
     global $wpdb;
     $tipo = $request->get_param('tipo');
@@ -334,9 +385,7 @@ function igsclac_guardar_evento($request) {
         'registro_habilitado' => !empty($data['registroHabilitado']) ? 1 : 0,
         'eje_tematico' => isset($data['ejeTematico']) ? sanitize_text_field($data['ejeTematico']) : null
     );
-    // manejar campo 'habilitado' solo si viene en el payload, para no sobrescribir en ediciones
     if (isset($data['habilitado'])) {
-        // Convertir correctamente: si es string "1" o "0", o boolean true/false
         $habilitado = $data['habilitado'];
         if (is_string($habilitado)) {
             $evento['habilitado'] = ($habilitado === '1' || strtolower($habilitado) === 'true') ? 1 : 0;
@@ -348,9 +397,11 @@ function igsclac_guardar_evento($request) {
     if ($id) {
         $wpdb->update($tabla, $evento, array('id' => $id));
     } else {
-        if (!isset($evento['habilitado'])) $evento['habilitado'] = 1; // default al crear
+        if (!isset($evento['habilitado'])) $evento['habilitado'] = 1;
         $wpdb->insert($tabla, $evento);
     }
+    
+    igsclac_invalidate_eventos_cache();
     return rest_ensure_response(['success' => true, 'id' => $evento['id']]);
 }
 
@@ -361,6 +412,7 @@ function igsclac_eliminar_evento($request) {
     $tabla_registros = $wpdb->prefix . 'igsclac_registros';
     $wpdb->delete($tabla_eventos, array('id' => $id));
     $wpdb->delete($tabla_registros, array('evento_id' => $id));
+    igsclac_invalidate_eventos_cache();
     return rest_ensure_response(['success' => true]);
 }
 
@@ -372,7 +424,6 @@ function igsclac_toggle_evento($request) {
 
     if (isset($data['habilitado'])) {
         $habilitado = $data['habilitado'];
-        // Convertir explícitamente a boolean y luego a int
         if (is_bool($habilitado)) {
             $new = $habilitado ? 1 : 0;
         } else if (is_string($habilitado)) {
@@ -385,7 +436,6 @@ function igsclac_toggle_evento($request) {
         $new = $current ? 0 : 1;
     }
 
-    // Validar: no se puede habilitar un evento antiguo
     if ($new === 1) {
         $evento = $wpdb->get_row($wpdb->prepare(
             "SELECT fecha_fin, hora_fin FROM $tabla WHERE id = %s",
@@ -400,18 +450,25 @@ function igsclac_toggle_evento($request) {
     }
 
     $wpdb->update($tabla, array('habilitado' => $new), array('id' => $id));
+    igsclac_invalidate_eventos_cache();
     return rest_ensure_response(array('success' => true, 'habilitado' => (bool) $new));
 }
 
+// Caché para registros (2 minutos)
 function igsclac_obtener_registros($request) {
     global $wpdb;
     $evento_id = $request->get_param('evento_id');
-    $tabla = $wpdb->prefix . 'igsclac_registros';
-    $results = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $tabla WHERE evento_id = %s ORDER BY fecha_registro DESC",
-        $evento_id
-    ), ARRAY_A);
-    return rest_ensure_response($results);
+    $cache_key = 'igsclac_registros_' . $evento_id;
+    $registros = get_transient( $cache_key );
+    if ( false === $registros ) {
+        $tabla = $wpdb->prefix . 'igsclac_registros';
+        $registros = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $tabla WHERE evento_id = %s ORDER BY fecha_registro DESC",
+            $evento_id
+        ), ARRAY_A );
+        set_transient( $cache_key, $registros, 2 * MINUTE_IN_SECONDS );
+    }
+    return rest_ensure_response($registros);
 }
 
 function igsclac_crear_registro($request) {
@@ -419,17 +476,18 @@ function igsclac_crear_registro($request) {
     $data = $request->get_json_params();
     $tabla_eventos = $wpdb->prefix . 'igsclac_eventos';
     $tabla_registros = $wpdb->prefix . 'igsclac_registros';
+    $evento_id = $data['eventoId'];
 
     $evento = $wpdb->get_row($wpdb->prepare(
         "SELECT capacidad FROM $tabla_eventos WHERE id = %s",
-        $data['eventoId']
+        $evento_id
     ));
     if (!$evento) {
         return new WP_Error('not_found', 'Evento no encontrado', array('status' => 404));
     }
     $registros_actuales = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $tabla_registros WHERE evento_id = %s",
-        $data['eventoId']
+        $evento_id
     ));
     if ($registros_actuales >= $evento->capacidad) {
         return new WP_Error('full', 'Evento lleno', array('status' => 400));
@@ -437,7 +495,7 @@ function igsclac_crear_registro($request) {
 
     $email_exists = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $tabla_registros WHERE evento_id = %s AND email = %s",
-        $data['eventoId'],
+        $evento_id,
         $data['email']
     ));
     if ($email_exists > 0) {
@@ -445,7 +503,7 @@ function igsclac_crear_registro($request) {
     }
 
     $registro = array(
-        'evento_id' => $data['eventoId'],
+        'evento_id' => $evento_id,
         'nombres' => sanitize_text_field($data['nombres']),
         'apellidos' => sanitize_text_field($data['apellidos']),
         'email' => sanitize_email($data['email']),
@@ -456,6 +514,8 @@ function igsclac_crear_registro($request) {
         'fecha_registro' => current_time('mysql')
     );
     $wpdb->insert($tabla_registros, $registro);
+    
+    delete_transient( 'igsclac_registros_' . $evento_id );
     return rest_ensure_response(['success' => true, 'id' => $wpdb->insert_id]);
 }
 
@@ -465,31 +525,27 @@ function igsclac_actualizar_asistentes_manuales($request) {
     $data = $request->get_json_params();
     $tabla = $wpdb->prefix . 'igsclac_eventos';
 
-    // Validar que el evento existe y obtener su capacidad
     $evento = $wpdb->get_row($wpdb->prepare("SELECT id, capacidad FROM $tabla WHERE id = %s", $id));
     if (!$evento) {
         return new WP_Error('not_found', 'Evento no encontrado', array('status' => 404));
     }
 
-    // Validar que sea un número válido
     $cantidad = isset($data['cantidad']) ? intval($data['cantidad']) : 0;
     if ($cantidad < 0) {
         return new WP_Error('invalid_quantity', 'La cantidad no puede ser negativa', array('status' => 400));
     }
-    
-    // Validar que no exceda la capacidad del evento
     if ($cantidad > $evento->capacidad) {
         return new WP_Error('exceeds_capacity', 'La cantidad no puede ser mayor a la capacidad del evento (' . $evento->capacidad . ')', array('status' => 400));
     }
 
-    // Actualizar en la BD
     $wpdb->query($wpdb->prepare(
         "UPDATE $tabla SET asistentes_manuales = %d WHERE id = %s",
         $cantidad,
         $id
     ));
 
-    // Verificar que se actualizó
+    igsclac_invalidate_eventos_cache(); // porque cambió asistentes_manuales
+
     $verificar = $wpdb->get_var($wpdb->prepare(
         "SELECT asistentes_manuales FROM $tabla WHERE id = %s",
         $id
@@ -567,7 +623,7 @@ function igsclac_sembrar_datos_iniciales() {
 add_action('after_switch_theme', 'igsclac_sembrar_datos_iniciales');
 
 /* ============================================================
-   5. HERO SLIDER PERSONALIZABLE
+   5. HERO SLIDER PERSONALIZABLE (con caché)
 ============================================================ */
 
 function igsclac_obtener_hero_slides_default() {
@@ -609,20 +665,26 @@ function igsclac_inicializar_hero_slides() {
         update_option('igsclac_hero_slides', $default_slides);
     }
 }
-add_action('wp_loaded', 'igsclac_inicializar_hero_slides');
+add_action('wp_loaded', 'igsclac_inicializar_hero_slides'); // Se ejecuta una vez y luego se cachea
 
+// Con caché para evitar leer option en cada petición
 function igsclac_obtener_hero_slides() {
-    $slides = get_option('igsclac_hero_slides');
-    if (!$slides || !is_array($slides)) {
-        $slides = igsclac_obtener_hero_slides_default();
-        update_option('igsclac_hero_slides', $slides);
-    } else {
-        foreach ($slides as &$slide) {
-            if (!isset($slide['overlayActivo'])) {
-                $slide['overlayActivo'] = true;
+    $cache_key = 'igsclac_hero_slides_cached';
+    $slides = get_transient( $cache_key );
+    if ( false === $slides ) {
+        $slides = get_option('igsclac_hero_slides');
+        if (!$slides || !is_array($slides)) {
+            $slides = igsclac_obtener_hero_slides_default();
+            update_option('igsclac_hero_slides', $slides);
+        } else {
+            foreach ($slides as &$slide) {
+                if (!isset($slide['overlayActivo'])) {
+                    $slide['overlayActivo'] = true;
+                }
             }
+            unset($slide);
         }
-        unset($slide);
+        set_transient( $cache_key, $slides, 10 * MINUTE_IN_SECONDS );
     }
     return rest_ensure_response($slides);
 }
@@ -649,24 +711,30 @@ function igsclac_guardar_hero_slides($request) {
     }
 
     update_option('igsclac_hero_slides', $slides);
+    delete_transient( 'igsclac_hero_slides_cached' );
     return rest_ensure_response(array('success' => true, 'slides' => $slides));
 }
 
-function igsclac_enqueue_select2() {
-    if (!is_admin()) {
-        wp_enqueue_style(
-            'select2-css',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
-            array(),
-            '4.1.0-rc.0'
-        );
-        wp_enqueue_script(
-            'select2-js',
-            'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
-            array('jquery'), // jQuery ya está encolado como dependencia de eventos-js
-            '4.1.0-rc.0',
-            true
-        );
+/* ============================================================
+   MIGRACIÓN ÚNICA: Agregar columna asistentes_manuales si no existe
+============================================================ */
+function igsclac_agregar_columna_asistentes_manuales() {
+    $version_db = get_option( 'igsclac_db_version', '0' );
+    if ( version_compare( $version_db, '1.2', '<' ) ) {
+        global $wpdb;
+        $tabla = $wpdb->prefix . 'igsclac_eventos';
+        
+        $columna_existe = $wpdb->get_results( $wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+             WHERE TABLE_NAME = %s AND COLUMN_NAME = 'asistentes_manuales'",
+            $tabla
+        ) );
+        
+        if ( empty( $columna_existe ) ) {
+            $wpdb->query( "ALTER TABLE $tabla ADD COLUMN asistentes_manuales INT DEFAULT 0 NOT NULL" );
+        }
+        
+        update_option( 'igsclac_db_version', '1.2' );
     }
 }
-add_action('wp_enqueue_scripts', 'igsclac_enqueue_select2');
+add_action( 'admin_init', 'igsclac_agregar_columna_asistentes_manuales' );
