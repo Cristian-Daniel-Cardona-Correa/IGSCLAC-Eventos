@@ -121,6 +121,11 @@ textarea {
 }
 
 /* ===================== TOPBAR ===================== */
+/* Ocultar admin bar cuando hay modal/editor abierto */
+body.modal-open #wpadminbar {
+    display: none !important;
+}
+
 .topbar {
     background: #fff;
     border-bottom: 1px solid #eee;

@@ -61,24 +61,35 @@ function toast(msg, type = '') { const t = $('#toast'); t.textContent = msg; t.c
 
 // Bloquear scroll del body (útil para móviles)
 function disableBodyScroll() {
-  const body = document.body;
-  body.style.overflow = 'hidden';
-  body.style.position = 'fixed';
-  body.style.width = '100%';
-  // Guardar el scroll actual para restaurarlo después
-  body.dataset.scrollTop = window.scrollY;
+    const body = document.body;
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.dataset.scrollTop = window.scrollY;
+
+    // Ocultar admin bar para evitar conflicto con position:fixed
+    const adminBar = document.getElementById('wpadminbar');
+    if (adminBar) adminBar.style.display = 'none';
+
+    body.classList.add('modal-open');
 }
 
 function enableBodyScroll() {
-  const body = document.body;
-  body.style.overflow = '';
-  body.style.position = '';
-  body.style.width = '';
-  const scrollTop = body.dataset.scrollTop;
-  if (scrollTop !== undefined) {
-    window.scrollTo(0, parseInt(scrollTop));
-    delete body.dataset.scrollTop;
-  }
+    const body = document.body;
+    body.style.overflow = '';
+    body.style.position = '';
+    body.style.width = '';
+    const scrollTop = body.dataset.scrollTop;
+    if (scrollTop !== undefined) {
+        window.scrollTo(0, parseInt(scrollTop));
+        delete body.dataset.scrollTop;
+    }
+
+    // Restaurar admin bar
+    const adminBar = document.getElementById('wpadminbar');
+    if (adminBar) adminBar.style.display = '';
+
+    body.classList.remove('modal-open');
 }
 
 function calcDuration(ini, fin) {
