@@ -522,6 +522,7 @@ function igsclac_crear_registro($request) {
     if (!$evento) {
         return new WP_Error('not_found', 'Evento no encontrado', array('status' => 404));
     }
+
     $registros_actuales = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $tabla_registros WHERE evento_id = %s",
         $evento_id
@@ -530,6 +531,7 @@ function igsclac_crear_registro($request) {
         return new WP_Error('full', 'Evento lleno', array('status' => 400));
     }
 
+    // Verificar email duplicado
     $email_exists = $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $tabla_registros WHERE evento_id = %s AND email = %s",
         $evento_id,
@@ -539,21 +541,35 @@ function igsclac_crear_registro($request) {
         return new WP_Error('duplicate_email', 'El correo electrónico ya está registrado para este evento.', array('status' => 400));
     }
 
+    $id_exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $tabla_registros WHERE evento_id = %s AND identificacion = %s",
+        $evento_id,
+        $data['identificacion']
+    ));
+    if ($id_exists > 0) {
+        return new WP_Error('duplicate_identificacion', 'Esta identificación ya está registrada para este evento.', array('status' => 400));
+    }
+
     $registro = array(
-        'evento_id' => $evento_id,
-        'nombres' => sanitize_text_field($data['nombres']),
-        'apellidos' => sanitize_text_field($data['apellidos']),
-        'email' => sanitize_email($data['email']),
-        'tipo_id' => sanitize_text_field($data['tipoId']),
+        'evento_id'      => $evento_id,
+        'nombres'        => sanitize_text_field($data['nombres']),
+        'apellidos'      => sanitize_text_field($data['apellidos']),
+        'email'          => sanitize_email($data['email']),
+        'tipo_id'        => sanitize_text_field($data['tipoId']),
         'identificacion' => sanitize_text_field($data['identificacion']),
-        'cargo' => sanitize_text_field($data['cargo']),
-        'institucion' => sanitize_text_field($data['institucion']),
+        'cargo'          => sanitize_text_field($data['cargo']),
+        'institucion'    => sanitize_text_field($data['institucion']),
         'fecha_registro' => current_time('mysql')
     );
-    $wpdb->insert($tabla_registros, $registro);
-    
-    delete_transient( 'igsclac_registros_' . $evento_id );
-    return rest_ensure_response(['success' => true, 'id' => $wpdb->insert_id]);
+
+    $result = $wpdb->insert($tabla_registros, $registro);
+
+    if ($result === false || $wpdb->insert_id === 0) {
+        return new WP_Error('insert_failed', 'No se pudo completar el registro. Intenta de nuevo.', array('status' => 500));
+    }
+
+    delete_transient('igsclac_registros_' . $evento_id);
+    return rest_ensure_response(array('success' => true, 'id' => $wpdb->insert_id));
 }
 
 function igsclac_actualizar_asistentes_manuales($request) {
