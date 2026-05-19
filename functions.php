@@ -57,8 +57,9 @@ function igsclac_assets() {
 
     // Localizar variables
     wp_localize_script('eventos-js', 'wpApiSettings', array(
-        'root'  => esc_url_raw(rest_url()),
-        'nonce' => wp_create_nonce('wp_rest')
+        'root'  => esc_url_raw( rest_url() ),
+        'nonce' => wp_create_nonce( 'wp_rest' ),
+        'isAdmin' => ( is_user_logged_in() && current_user_can( 'manage_options' ) ) ? true : false,
     ));
 
     wp_localize_script('eventos-js', 'igsclacData', array(
@@ -194,19 +195,19 @@ add_action('rest_api_init', function () {
     register_rest_route('igsclac/v1', '/eventos/(?P<tipo>academico|investigacion)', array(
         'methods'             => 'POST',
         'callback'            => 'igsclac_guardar_evento',
-        'permission_callback' => '__return_true'
+        'permission_callback' => 'igsclac_solo_admin'
     ));
     // Toggle habilitado de evento (solo admin)
     register_rest_route('igsclac/v1', '/eventos/(?P<id>[a-z0-9_]+)/toggle', array(
         'methods'             => 'POST',
         'callback'            => 'igsclac_toggle_evento',
-        'permission_callback' => '__return_true'
+        'permission_callback' => 'igsclac_solo_admin'
     ));
     // Eliminar evento (solo admin)
     register_rest_route('igsclac/v1', '/eventos/(?P<id>[a-z0-9_]+)', array(
         'methods'             => 'DELETE',
         'callback'            => 'igsclac_eliminar_evento',
-        'permission_callback' => '__return_true'
+        'permission_callback' => 'igsclac_solo_admin'
     ));
     // Obtener registros de un evento
     register_rest_route('igsclac/v1', '/registros/(?P<evento_id>[a-z0-9_]+)', array(
@@ -224,7 +225,7 @@ add_action('rest_api_init', function () {
     register_rest_route('igsclac/v1', '/eventos/(?P<id>[a-z0-9_]+)/asistentes-manuales', array(
         'methods'             => 'POST',
         'callback'            => 'igsclac_actualizar_asistentes_manuales',
-        'permission_callback' => '__return_true'
+        'permission_callback' => 'igsclac_solo_admin'
     ));
     // Obtener slides del hero
     register_rest_route('igsclac/v1', '/hero-slides', array(
@@ -236,9 +237,27 @@ add_action('rest_api_init', function () {
     register_rest_route('igsclac/v1', '/hero-slides', array(
         'methods'             => 'POST',
         'callback'            => 'igsclac_guardar_hero_slides',
-        'permission_callback' => '__return_true'
+        'permission_callback' => 'igsclac_solo_admin'
     ));
 });
+
+function igsclac_solo_admin( WP_REST_Request $request ) {
+    if ( ! is_user_logged_in() ) {
+        return new WP_Error(
+            'rest_forbidden',
+            'Debes iniciar sesión para realizar esta acción.',
+            array( 'status' => 401 )
+        );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return new WP_Error(
+            'rest_forbidden',
+            'No tienes permisos para realizar esta acción.',
+            array( 'status' => 403 )
+        );
+    }
+    return true;
+}
 
 // --- Funciones auxiliares de caché ---
 function igsclac_get_cached_eventos( $tipo ) {
@@ -455,20 +474,38 @@ function igsclac_toggle_evento($request) {
 }
 
 // Caché para registros (2 minutos)
-function igsclac_obtener_registros($request) {
+function igsclac_obtener_registros( $request ) {
     global $wpdb;
     $evento_id = $request->get_param('evento_id');
+
+    // Solo admins ven datos personales; el resto solo recibe el conteo
+    $es_admin = is_user_logged_in() && current_user_can( 'manage_options' );
+
     $cache_key = 'igsclac_registros_' . $evento_id;
-    $registros = get_transient( $cache_key );
-    if ( false === $registros ) {
+
+    if ( $es_admin ) {
+        // Admin: datos completos, sin caché
         $tabla = $wpdb->prefix . 'igsclac_registros';
-        $registros = $wpdb->get_results($wpdb->prepare(
+        $registros = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM $tabla WHERE evento_id = %s ORDER BY fecha_registro DESC",
             $evento_id
         ), ARRAY_A );
-        set_transient( $cache_key, $registros, 2 * MINUTE_IN_SECONDS );
+        return rest_ensure_response( $registros );
     }
-    return rest_ensure_response($registros);
+
+    // Usuario normal: solo el conteo (cacheado)
+    $conteo = get_transient( $cache_key );
+    if ( false === $conteo ) {
+        $tabla = $wpdb->prefix . 'igsclac_registros';
+        $total = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $tabla WHERE evento_id = %s",
+            $evento_id
+        ) );
+        // Devolvemos un array de N elementos vacíos para que .length funcione igual en JS
+        $conteo = array_fill( 0, $total, array() );
+        set_transient( $cache_key, $conteo, 2 * MINUTE_IN_SECONDS );
+    }
+    return rest_ensure_response( $conteo );
 }
 
 function igsclac_crear_registro($request) {

@@ -238,16 +238,15 @@ async function fetchAPI(endpoint, options = {}) {
   const defaultOptions = {
     credentials: 'same-origin',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'X-WP-Nonce': wpApiSettings.nonce
     },
     ...options
   };
 
-  /* Ya no verificamos nonce temporalmente
-  if (options.method && options.method !== 'GET' && options.method !== 'HEAD') {
-    defaultOptions.headers['X-WP-Nonce'] = wpApiSettings.nonce;
+  if (options.headers) {
+    defaultOptions.headers = { ...defaultOptions.headers, ...options.headers };
   }
-*/
 
   if (options.body && typeof options.body === 'object') {
     defaultOptions.body = JSON.stringify(options.body);
@@ -285,10 +284,15 @@ async function cargarEventos(tipo, includeDisabled = false) {
   if (state.role === 'admin') {
     url += (url.includes('?') ? '&' : '?') + '_=' + Date.now();
   }
+
   const res = await fetch(url, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' }
+    headers: {
+      'Content-Type': 'application/json',
+      'X-WP-Nonce': wpApiSettings.nonce
+    }
   });
+
   if (!res.ok) throw new Error(`Error ${res.status}`);
   const items = await res.json();
   const result = includeDisabled ? items : (items || []).filter(e => e.habilitado !== false);
