@@ -3085,13 +3085,14 @@ async function renderUpcoming() {
 
   const upcoming = all
     .filter(e => {
-      // Construir fecha y hora de inicio (YYYY-MM-DDTHH:MM:SS)
-      const startDateTime = new Date(`${e.fechaInicio}T${e.horaInicio || '00:00'}:00`);
-      return startDateTime >= now;
+      // Extraemos solo HH:MM para evitar segundos duplicados
+      const hora = (e.horaInicio || '00:00').substring(0, 5);
+      const startDateTime = new Date(`${e.fechaInicio}T${hora}:00`);
+      return !isNaN(startDateTime) && startDateTime >= now;
     })
     .sort((a, b) => {
-      const startA = new Date(`${a.fechaInicio}T${a.horaInicio || '00:00'}:00`);
-      const startB = new Date(`${b.fechaInicio}T${b.horaInicio || '00:00'}:00`);
+      const startA = new Date(`${a.fechaInicio}T${(a.horaInicio || '00:00').substring(0, 5)}:00`);
+      const startB = new Date(`${b.fechaInicio}T${(b.horaInicio || '00:00').substring(0, 5)}:00`);
       return startA - startB;
     })
     .slice(0, 5);
